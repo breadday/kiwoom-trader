@@ -1,0 +1,37 @@
+# 멀티 브로커 계좌 설정 - 키움, NH, 삼성, KB
+# paper: true = 모의투자 (안전), false = 실전
+
+accounts:
+  - id: kiwoom_main
+    broker: kiwoom
+    name: 키움 주계좌
+    app_key: "YOUR_KIWOOM_APP_KEY"
+    app_secret: "YOUR_KIWOOM_APP_SECRET"
+    account_no: "1234-5678"
+    paper: true  # 실전은 false
+
+  - id: nh_main
+    broker: nh
+    name: NH투자증권
+    app_key: "YOUR_NH_APP_KEY"
+    app_secret: "YOUR_NH_APP_SECRET"
+    account_no: "1234-5678"
+    paper: true
+
+  - id: samsung_main
+    broker: samsung
+    name: 삼성증권
+    app_key: "YOUR_SAMSUNG_APP_KEY"
+    app_secret: "YOUR_SAMSUNG_APP_SECRET"
+    account_no: "1234-5678"
+    paper: true
+
+  - id: kb_main
+    broker: kb
+    name: KB증권
+    app_key: "YOUR_KB_APP_KEY"
+    app_secret: "YOUR_KB_APP_SECRET"
+    account_no: "1234-5678"
+    paper: true
+
+# 실전 전환 시 paper: false로 변경
