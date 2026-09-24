@@ -4,3 +4,6 @@ config_live.py
 .env
 *.key
 token.json
+__pycache__/
+*.pyc
+*.pyo
