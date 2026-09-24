@@ -120,7 +120,7 @@ class StrategyOptimizer:
         # 즉시정리 기준 -25 ~ -50, 분할매도 기준 -10 ~ -30 그리드 서치
         for immediate_th in [-25, -30, -35, -40, -45, -50]:
             for partial_th in [-10, -15, -20, -25]:
-                if partial_th >= immediate_th:  # 분할매도가 즉시정리보다 높아야 함
+                if partial_th <= immediate_th:  # 분할매도가 즉시정리보다 높아야 함
                     continue
                 params = {"immediate_th": immediate_th, "partial_th": partial_th}
                 res = self.simulate_trades(code, "RESCUE", params)
