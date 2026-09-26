@@ -28,8 +28,8 @@
 - [ ] T7: 실제 키움 일봉 연동 백테스트
   - 파일: /api/kiwoom_api.py, /api/strategy_optimizer.py, /docs/AUTOMATION-STEP-07*.md
   - 완료조건: 읽기 전용 일봉 조회를 최적화 계산에 연결하고, 확정된 전략/데이터 계약으로 검증
-  - 진행: STEP 07A 일봉 조회기, STEP 07B RESCUE, STEP 07C FACTOR fixture 구현·테스트 완료. STEP 07D 기준일 계약 구현·42개 테스트·독립 리뷰 완료, 로컬 커밋 `b0c2a24f45deb0b38dcf301a026b82cfd15da70d` 생성. Docker push는 HTTPS 인증 오류로 차단되어 원격 SHA 대기. 상세는 `docs/AUTOMATION-STEP-07D-RESULTS.md`.
-  - 남음: Windows에서 STEP 07D 브랜치 push 후 원격 SHA 확인, fixture 밖 실제 Kiwoom 응답·페이지네이션·가격부호·휴장일 동작 확인. ORB/BULL_FLAG 및 portfolio recommender는 규칙/계약 미정의로 fail-closed 상태이며 별도 설계 필요.
+  - 진행: STEP 07A 일봉 조회기, STEP 07B RESCUE, STEP 07C FACTOR fixture 구현·테스트 완료. STEP 07D 기준일 계약 구현·42개 테스트·독립 리뷰 완료. 사용자 push 뒤 원격 SHA `57ab90f2f9807e4c67606ea60fc44c5716bd9929`와 당시 local HEAD 일치를 확인. 이 사실을 기록하는 status-only 문서 커밋은 로컬에서 추가 push 대기. 상세는 `docs/AUTOMATION-STEP-07D-RESULTS.md`.
+  - 남음: STEP 07D 최신 status-only 문서 커밋을 Windows에서 push 후 SHA 확인, fixture 밖 실제 Kiwoom 응답·페이지네이션·가격부호·휴장일 동작 확인. ORB/BULL_FLAG 및 portfolio recommender는 규칙/계약 미정의로 fail-closed 상태이며 별도 설계 필요.
 
 - [ ] T8: Vercel 배포 + accounts.yaml 실전 전환 가이드
   - 파일: /docs/deployment.md
