@@ -1,11 +1,11 @@
 # 자동 개발 STEP 07B — 실행 결과 및 재개 지점
 
 ## 상태
-- 단계: RESCUE 60일 OHLCV 백테스트·23개 테스트·독립 최종 리뷰 통과; 로컬 커밋 완료, HTTPS 인증 문제로 원격 푸시 대기
+- 단계: 07B 완료(23개 테스트·독립 리뷰·원격 SHA 확인 완료); 후속 STEP 07C FACTOR 개발 중
 - 브랜치: `feat/kiwoom-daily-backtest-stage-07b`
 - 기준 커밋: `87cbe121ca5aa6e5af7764997165dca920f67aa8` (STEP 07A)
 - 작업 디렉터리: `/workspace/kiwoom_trader-07b` — 기존 dirty worktree와 분리된 linked worktree
-- 로컬 커밋: `d26f2641adbf3ebe1e0a7fedef4c6ab6662da0dd` (`[verified] Backtest RESCUE strategy with daily OHLCV`). push 실패: `fatal: could not read Username for 'https://github.com': No such device or address`; 원격 SHA는 확인되지 않았다.
+- 원격 확인 커밋: `fd71b57c71f9db57ab91a8f4f3a82360a58d6a8e` (`[verified] Backtest RESCUE strategy with daily OHLCV`). `git ls-remote`의 07B 원격 브랜치 SHA와 일치한다.
 - 실 API/계좌/주문: 전부 미실행
 
 ## 사용자 승인 규칙
@@ -16,7 +16,7 @@
 5. 수수료·세금·슬리피지는 제외.
 
 ## 구현
-- `StrategyOptimizer(daily_chart_provider=KiwoomAPI.get_daily_chart)` 형태로 provider 주입을 지원한다. provider 요청은 종목당 `limit=60`으로 한 번이다.
+- `StrategyOptimizer(daily_chart_provider=kiwoom_api.get_daily_chart)` 형태로 provider 주입을 지원한다. `kiwoom_api`는 `KiwoomAPI` 인스턴스여야 하며, 종목당 `limit=60`으로 한 번 조회한다.
 - 60개가 정확히 도착하지 않거나, 날짜 중복/비정렬 및 비정상 OHLCV이면 실패한다. mock 데이터로 대체하지 않는다.
 - RESCUE 23개 parameter 조합은 같은 60일 snapshot으로 계산한다.
 - 총수익, 누적자산 곡선 기준 MDD, 일별수익률 기반 연환산 Sharpe, 1개 전략 캠페인의 승률 및 가중 평균 보유일을 산출한다.
@@ -44,5 +44,5 @@ PASS
 - 22개 테스트는 fixture와 fake provider만 사용. 실제 Kiwoom API schema/pagination/sign encoding은 미검증.
 - 수수료/세금/슬리피지 제외; close-only 실행이라 장중 임계치 터치 및 갭 체결을 재현하지 않는다.
 - RESCUE 단일 진입/최대 1회 분할매도 정책 기준. 매수 재진입이나 portfolio-level position basis는 모델링하지 않는다.
-- FACTOR의 공식 점수 계산 데이터 계약 및 추천 우선순위가 정해지지 않아 T7 전체 완료로 보지 않는다. `docs/03-tasks.md` T7은 유지한다.
-- 다음: 독립 최종 리뷰 → 문서/검사 결과 재확인 → STEP 07B 별도 커밋·푸시 시도 → 원격 SHA 확인. 원본 worktree의 미커밋 수정은 보존한다.
+- STEP 07B 당시 FACTOR 점수와 포트폴리오 선택 규칙이 미정의여서 구현하지 않았다. 해당 계약은 사용자 승인으로 STEP 07C 계획에 정의했고 현재 구현·검증 중이다.
+- 다음: STEP 07C FACTOR 고정 매도규칙 백테스트 테스트/구현/독립 리뷰/원격 푸시. 원본 worktree의 미커밋 수정은 계속 보존한다.

@@ -81,23 +81,18 @@ class DailyBacktestTests(unittest.TestCase):
         self.assertEqual(len(results), 23)
         self.assertEqual(results, sorted(results, key=lambda item: item.score, reverse=True))
 
-    def test_unsupported_factor_optimization_fails_without_fetching_data(self):
+    def test_factor_optimization_rejects_code_outside_universe_without_fetching_data(self):
         calls = []
-
-        def provider(code, *, limit):
-            calls.append((code, limit))
-            return bars_with_closes({})
-
-        optimizer = StrategyOptimizer(daily_chart_provider=provider)
-        with self.assertRaisesRegex(NotImplementedError, "FACTOR"):
+        optimizer = StrategyOptimizer(daily_chart_provider=lambda code, *, limit: calls.append((code, limit)))
+        with self.assertRaisesRegex(ValueError, "approved FACTOR universe"):
             optimizer.optimize_factor("005930")
         self.assertEqual(calls, [])
 
-    def test_all_strategy_optimization_fails_closed_until_factor_rules_exist(self):
+    def test_all_strategy_optimization_fails_closed_without_orb_bull_flag_rules(self):
         calls = []
         optimizer = StrategyOptimizer(daily_chart_provider=lambda code, *, limit: calls.append(code))
 
-        with self.assertRaisesRegex(NotImplementedError, "FACTOR"):
+        with self.assertRaisesRegex(NotImplementedError, "ORB/BULL_FLAG"):
             optimizer.optimize_all_strategies("005930")
         self.assertEqual(calls, [])
 
