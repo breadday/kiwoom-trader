@@ -1,4 +1,5 @@
 import requests, time, random
+from datetime import datetime
 from .kiwoom_auth import KiwoomAuth
 
 class KiwoomAPI:
@@ -26,6 +27,110 @@ class KiwoomAPI:
         url = f"{self.base}/dostk/mintick"
         r = requests.post(url, headers=self.auth.headers(), json={"stk_cd": code, "tic_scope": tick})
         return r.json().get("chart", [])
+
+    def get_daily_chart(self, code, base_dt="00000000", limit=60, max_pages=10):
+        """Read adjusted daily OHLCV bars from Kiwoom ka10081.
+
+        This is a read-only market-data request and is deliberately independent
+        of the paper/real order mode. It never places or simulates an order.
+        Returns normalized bars in ascending date order.
+        """
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError("code must be a non-empty stock code")
+        if not isinstance(base_dt, str) or (base_dt != "00000000" and (len(base_dt) != 8 or not base_dt.isdigit())):
+            raise ValueError("base_dt must be YYYYMMDD or 00000000")
+        try:
+            if base_dt != "00000000":
+                datetime.strptime(base_dt, "%Y%m%d")
+        except ValueError as exc:
+            raise ValueError("base_dt must be a valid YYYYMMDD date or 00000000") from exc
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        if isinstance(max_pages, bool) or not isinstance(max_pages, int) or max_pages <= 0:
+            raise ValueError("max_pages must be a positive integer")
+        url = f"{self.auth.base_url.rstrip('/')}/api/dostk/chart"
+        bars_by_date = {}
+        total_rows = 0
+        continuation = None
+        seen_next_keys = set()
+
+        for page_index in range(max_pages):
+            self._throttle()
+            headers = dict(self.auth.headers())
+            headers.update({
+                "Content-Type": "application/json;charset=UTF-8",
+                "api-id": "ka10081",
+            })
+            if continuation is not None:
+                headers["cont-yn"] = "Y"
+                headers["next-key"] = continuation
+
+            response = requests.post(
+                url,
+                headers=headers,
+                json={"stk_cd": code, "base_dt": base_dt, "upd_stkpc_tp": "1"},
+                timeout=10,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise RuntimeError("Kiwoom daily chart response must be an object")
+            return_code = payload.get("return_code")
+            if return_code not in (0, "0"):
+                raise RuntimeError(payload.get("return_msg") or f"Kiwoom daily chart failed: {return_code!r}")
+
+            if "stk_dt_pole_chart_qry" not in payload or payload["stk_dt_pole_chart_qry"] is None:
+                raise RuntimeError("Kiwoom daily chart rows field is missing or null")
+            rows = payload["stk_dt_pole_chart_qry"]
+            if not isinstance(rows, list):
+                raise RuntimeError("Kiwoom daily chart rows must be a list")
+            total_rows += len(rows)
+            if total_rows > 10000:
+                raise RuntimeError("Kiwoom daily chart response contains too many rows across pages")
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise RuntimeError(f"Invalid Kiwoom daily chart row: {row!r}")
+                try:
+                    date = str(row["dt"])
+                    if len(date) != 8 or not date.isdigit():
+                        raise ValueError("invalid date")
+                    datetime.strptime(date, "%Y%m%d")
+                    bar = {
+                        "date": date,
+                        "open": int(str(row["open_pric"]).replace(",", "").strip().lstrip("+")),
+                        "high": int(str(row["high_pric"]).replace(",", "").strip().lstrip("+")),
+                        "low": int(str(row["low_pric"]).replace(",", "").strip().lstrip("+")),
+                        "close": int(str(row["cur_prc"]).replace(",", "").strip().lstrip("+")),
+                        "volume": int(str(row["trde_qty"]).replace(",", "").strip()),
+                    }
+                    if (
+                        min(bar["open"], bar["high"], bar["low"], bar["close"]) <= 0
+                        or bar["volume"] < 0
+                        or bar["low"] > min(bar["open"], bar["close"])
+                        or bar["high"] < max(bar["open"], bar["close"])
+                    ):
+                        raise ValueError("OHLC prices must be positive and internally consistent; volume must be non-negative")
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise RuntimeError(f"Invalid Kiwoom daily chart row: {row!r}") from exc
+                bars_by_date[date] = bar
+
+            if len(bars_by_date) >= limit:
+                break
+            response_headers = response.headers
+            has_more = str(response_headers.get("cont-yn", "N")).upper() == "Y"
+            next_key = response_headers.get("next-key", "")
+            if not has_more:
+                break
+            if not next_key:
+                raise RuntimeError("Kiwoom indicated another chart page without a next-key")
+            if next_key in seen_next_keys:
+                raise RuntimeError("Kiwoom repeated a daily chart next-key")
+            if page_index + 1 >= max_pages:
+                raise RuntimeError("Kiwoom daily chart exceeded max_pages before reaching the requested limit")
+            seen_next_keys.add(next_key)
+            continuation = next_key
+
+        return [bars_by_date[date] for date in sorted(bars_by_date)[-limit:]]
 
     def buy_market(self, code, qty, price=50000):
         self._throttle()
