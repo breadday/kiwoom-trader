@@ -24,7 +24,7 @@ class KiwoomAuth:
         self.token = data.get("token") or data.get("access_token")
         # 키움 토큰은 24시간 유효
         self.expires_at = time.time() + 23*3600
-        print(f"[AUTH] 토큰 발급 완료: {self.token[:20]}...")
+        print("[AUTH] 토큰 발급 완료")
         return self.token
 
     def headers(self):
