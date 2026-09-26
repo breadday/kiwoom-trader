@@ -13,7 +13,8 @@
 - 전체 테스트: 42개 통과(16 daily-chart + 9 RESCUE + 17 FACTOR).
 - `compileall` 및 `git diff --check`: 통과.
 - 독립 리뷰: `deleg_3881e7b6` `passed=true`, blocker 없음.
-- 커밋/push: 미완료. 리뷰와 최종 문서 상태 갱신 뒤 전체 검증을 다시 통과했으며, 구현/test diff 리뷰는 `deleg_3881e7b6`에서 통과.
+- 구현 커밋 `b0c2a24f45deb0b38dcf301a026b82cfd15da70d` 생성 완료.
+- Push 미완료: HTTPS 인증 누락으로 원격 SHA 확인 불가.
 
 ## 기준
 공식 가이드에서 `base_dt`는 필수 `YYYYMMDD`로 명시되고, 조정주가를 얻으려면 권리발생일 이후 기준일을 넣도록 안내한다.[1] 테스트는 이 입력 계약과 미완료 당일봉 회피 기본값을 검증한다. 실제 서버의 응답·거래일 달력 동작은 검증하지 않는다.

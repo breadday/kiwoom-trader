@@ -44,7 +44,9 @@ PASS
 ## 독립 리뷰 / 완료 게이트
 - 구현·테스트·문서 exact staged diff 독립 리뷰: `deleg_3881e7b6`, `passed=true`; security_concerns 및 logic_errors 없음.
 - 제안은 live Kiwoom 호환성/휴장일/조정가격 표현을 미검증으로 계속 명시하는 것뿐이며, 문서 제한사항에 반영되어 있다.
-- 최종 문서 갱신 후 전체 42개 테스트, compileall, diff-check를 재실행해 통과했다. 문서 전용 상태 기록 수정은 검토 절차에서 생략 가능하며, 구현/test diff 리뷰는 `deleg_3881e7b6`에서 통과했다. STEP 07D commit/push 및 원격 SHA 확인은 남아 있다.
+- STEP 07D 구현/테스트/문서 커밋: `b0c2a24f45deb0b38dcf301a026b82cfd15da70d` (로컬).
+- Push 차단: Docker HTTPS 인증 부재로 `fatal: could not read Username for 'https://github.com': No such device or address` 반환. 원격 SHA 미확인.
+- 사용자가 Windows에서 push 후 원격 SHA를 확인하면 이 결과 문서와 `docs/03-tasks.md`에 기록한다.
 
 ## 알려진 제한
 - fixture 통과는 실제 Kiwoom 실/모의 서버 호환성 증거가 아니다.
