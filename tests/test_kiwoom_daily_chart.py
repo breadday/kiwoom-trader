@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime as real_datetime, timedelta, timezone
 from unittest.mock import patch
 
 from api.kiwoom_api import KiwoomAPI
@@ -169,6 +170,26 @@ class KiwoomDailyChartTests(unittest.TestCase):
     def test_rejects_invalid_base_date_before_network_call(self):
         with self.assertRaisesRegex(ValueError, "base_dt"):
             self.make_api().get_daily_chart("005930", base_dt="20261399")
+
+    @patch("api.kiwoom_api.datetime")
+    @patch("api.kiwoom_api.requests.post")
+    def test_omitted_base_date_uses_previous_kst_calendar_day(self, post, mocked_datetime):
+        kst = timezone(timedelta(hours=9))
+        mocked_datetime.now.return_value = real_datetime(2026, 9, 27, 0, 30, tzinfo=kst)
+        mocked_datetime.strptime = real_datetime.strptime
+        post.return_value = FakeResponse({"return_code": 0, "stk_dt_pole_chart_qry": []})
+
+        self.make_api().get_daily_chart("005930", limit=1)
+
+        self.assertEqual(post.call_args.kwargs["json"]["base_dt"], "20260926")
+        mocked_datetime.now.assert_called_once_with(kst)
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_rejects_undocumented_zero_base_date_before_network_call(self, post):
+        post.return_value = FakeResponse({"return_code": 0, "stk_dt_pole_chart_qry": []})
+        with self.assertRaisesRegex(ValueError, "valid YYYYMMDD"):
+            self.make_api().get_daily_chart("005930", base_dt="00000000")
+        post.assert_not_called()
 
 
 if __name__ == "__main__":
