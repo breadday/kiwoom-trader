@@ -13,7 +13,9 @@
 - 전체 회귀: 43 tests passed; compileall 및 diff-check 통과.
 - STEP 07D 원격 SHA `e1b60292add4ccd635d7c49d9e4d6e63ca7e49d5` 확인.
 - 독립 리뷰 2차(`deleg_7a636aa3`) `passed=true`; security_concerns/logic_errors 없음. reviewer suggestion 반영 완료.
-- commit/push 및 STEP 07E 원격 SHA 확인: 대기.
+- STEP 07E 구현 커밋 `944f002f3f546e73508e05f4e6ae3de20bd3f292` 생성.
+- Docker HTTPS push 인증 실패(`fatal: could not read Username for 'https://github.com': No such device or address`); 직후 remote readback에서 STEP 07E 브랜치가 아직 없음을 확인했다.
+- Windows에서 feature branch를 push한 뒤 원격 SHA가 최신 local HEAD와 같은지 확인해야 한다.
 
 ## 구현 결과
 - `api/kiwoom_auth.py`: 인증 성공 메시지에서 bearer token 일부를 제거하고 일반 상태 메시지만 출력.

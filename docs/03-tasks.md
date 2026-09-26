@@ -28,7 +28,7 @@
 - [ ] T7: 실제 키움 일봉 연동 백테스트
   - 파일: /api/kiwoom_api.py, /api/strategy_optimizer.py, /docs/AUTOMATION-STEP-07*.md
   - 완료조건: 읽기 전용 일봉 조회를 최적화 계산에 연결하고, 확정된 전략/데이터 계약으로 검증
-  - 진행: STEP 07A 일봉 조회기, STEP 07B RESCUE, STEP 07C FACTOR fixture 구현·테스트 완료. STEP 07D 기준일 계약 구현·42개 테스트·독립 리뷰 완료; 원격 SHA `e1b60292add4ccd635d7c49d9e4d6e63ca7e49d5` 확인. STEP 07E bearer token 로그 노출 방지 수정, 43개 테스트 및 독립 리뷰(`deleg_7a636aa3`, passed=true) 완료; commit/push 대기. 상세는 `docs/AUTOMATION-STEP-07D-RESULTS.md`, `docs/AUTOMATION-STEP-07E-RESULTS.md`.
+  - 진행: STEP 07A 일봉 조회기, STEP 07B RESCUE, STEP 07C FACTOR fixture 구현·테스트 완료. STEP 07D 기준일 계약 구현·42개 테스트·독립 리뷰 완료; 원격 SHA `e1b60292add4ccd635d7c49d9e4d6e63ca7e49d5` 확인. STEP 07E bearer token 로그 노출 방지 수정, 43개 테스트 및 독립 리뷰(`deleg_7a636aa3`, passed=true) 완료. 로컬 커밋 `944f002f3f546e73508e05f4e6ae3de20bd3f292`; Docker push 인증 실패, Windows push 대기. 상세는 `docs/AUTOMATION-STEP-07D-RESULTS.md`, `docs/AUTOMATION-STEP-07E-RESULTS.md`.
   - 남음: 실제 Kiwoom 응답·페이지네이션·가격부호·휴장일 호환성은 미검증; 읽기 전용 credential probe는 별도 승인된 환경에서만 수행. ORB/BULL_FLAG 및 portfolio recommender는 규칙/계약 미정의로 fail-closed 상태이며 별도 설계 필요.
 
 - [ ] T8: Vercel 배포 + accounts.yaml 실전 전환 가이드

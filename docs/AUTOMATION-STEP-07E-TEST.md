@@ -35,4 +35,5 @@ Only a fake token and mocked OAuth response were used. No actual key, secret, to
 ## Completion gate
 - Tests/compileall/diff-check passed.
 - Independent review round 2 (`deleg_7a636aa3`) passed; no security or logic blockers.
-- Commit/push and STEP 07E remote SHA readback remain pending.
+- 구현 커밋 `944f002f3f546e73508e05f4e6ae3de20bd3f292` 생성 완료.
+- Docker push 인증 실패, remote branch 미생성 확인; Windows push 및 SHA readback 대기.
