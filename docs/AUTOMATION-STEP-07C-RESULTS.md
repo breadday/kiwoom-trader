@@ -1,10 +1,10 @@
 # 자동 개발 STEP 07C — FACTOR 일봉 백테스트 결과 및 재개 지점
 
 ## 상태
-- 코드·테스트·문서 보완 완료; 40개 전체 테스트 통과; 2차 독립 리뷰 blocker 수정 완료, staged diff 재리뷰 대기
+- 코드·테스트·문서 완료; 40개 테스트와 구현/테스트/문서 독립 리뷰 통과; 구현 커밋 `a08dba709b364f638c28ad3a373c026b226062ee` 원격 SHA 확인, 후속 문서 상태 갱신은 로컬에서 push 대기
 - 브랜치 `feat/kiwoom-daily-backtest-stage-07c`, 격리 worktree `/workspace/kiwoom_trader-07c`
 - 기준/부모 커밋: STEP 07B `fd71b57c71f9db57ab91a8f4f3a82360a58d6a8e` (원격 일치 확인)
-- 현재 STEP 07C는 미커밋. 07B 완료분·원본 checkout의 사용자 변경을 수정하지 않음
+- 구현 커밋 `a08dba709b364f638c28ad3a373c026b226062ee`는 원격과 일치 확인. 현재 추가된 문서 상태 보정은 로컬에서 push 대기. 원본 checkout의 사용자 변경은 수정하지 않음
 
 ## 승인된 동작
 - 유니버스: `005935`, `061220`, `067310`, `086520`, `253590`, `272210`, `441680`, `416770`.
@@ -25,7 +25,7 @@
 
 ## RED → GREEN / 검증
 - 1차 독립 리뷰 `passed=false`: 252/60행 endpoint 해석, quality 경계 동률, score index, equity metrics 지적. 확인 후 source excerpt와 일치하는 row indices를 테스트로 고정, 정확히 `floor(.3N)` 제거 및 코드 tie-break, entry offset 규칙 명확화, exit-day mark 검증을 추가.
-- 2차 독립 리뷰 `passed=false`: close에서 산출한 월요일 점수를 같은 close에 체결하면 look-ahead가 발생한다는 지적. 사용자 승인에 따라 신호는 월요일 close 확정, 체결은 다음 거래일 open으로 변경. close 110 / next open 80 fixture가 구 구현에서 +10%를 내는 RED를 확인하고 수정 뒤 -20%로 검증. 추가로 마지막 horizon 월요일 partial 신호에 다음 open이 없는데 latch만 켜져 `partial_day=None` 오류가 나는 RED를 확인하고 실행 가능한 후속 bar가 있을 때만 신호를 예약하도록 수정. 해당 변경 staged diff의 재리뷰 대기.
+- 2차 독립 리뷰 `passed=false`: close에서 산출한 월요일 점수를 같은 close에 체결하면 look-ahead가 발생한다는 지적. 사용자 승인에 따라 신호는 월요일 close 확정, 체결은 다음 거래일 open으로 변경. close 110 / next open 80 fixture가 구 구현에서 +10%를 내는 RED를 확인하고 수정 뒤 -20%로 검증. 추가로 마지막 horizon 월요일 partial 신호에 다음 open이 없는데 latch만 켜져 `partial_day=None` 오류가 나는 RED를 확인하고 실행 가능한 후속 bar가 있을 때만 신호를 예약하도록 수정. 해당 수정본은 3차 독립 리뷰에서 구현/테스트/문서 모두 `passed=true`를 확인.
 - Factor 점수 helper와 미지원 API는 구현 전에 missing-feature/NotImplemented RED를 확인한 뒤 구현으로 통과.
 - 부분매도 회귀 시나리오가 주간 날짜 fixture에서 첫 월요일 전날이 진입일과 겹치는 점을 발견. 첫 평가 월요일은 건너뛰고 2·3번째 월요일에 반등/재통과를 배치하여 진입가를 보존한 검증으로 수정.
 - 잘못된 달력 날짜가 8개 데이터에서 같은 위치에 있을 때 검증되는 케이스를 RED로 재현하고 `datetime.strptime` 유효성 확인을 추가.
@@ -50,4 +50,5 @@ PASS
 - 값/기간별 수익과 점수는 승인된 가정 하의 결정론적 시뮬레이션일 뿐 수익 보장이나 투자 권유가 아님.
 - PER/PBR 등 실제 재무자료를 쓰지 않고 60일 역모멘텀을 가치 대용치로 쓴다. 기존 원본 전략 코드의 값/품질 proxy 정의를 그대로 따른다.
 - 일봉 샘플은 키움 시장 휴일/수정주가의 실제 기준을 외부에서 검증해야 함. 현재 client는 adjusted-bar request flag를 사용하나 live contract 검증은 별개.
-- 다음 단계: staged diff 보안/코드 검사, 정확한 파일 변경분 독립 리뷰, 승인 후 07C 전용 커밋·푸시와 `git ls-remote` SHA 확인. ORB/BULL_FLAG/portfolio recommender는 이 단계 범위 밖.
+- 다음 단계: Windows에서 브랜치 `feat/kiwoom-daily-backtest-stage-07c`를 push하고 원격 브랜치 SHA를 현재 로컬 HEAD와 대조한다. 컨테이너 push는 HTTPS Username 자격증명 부족으로 실패했으며 SSH 인증도 설정되어 있지 않다. 원격 반영 전.
+- 전체 미완료 범위: 실제 Kiwoom API 응답/페이지네이션/가격 부호 규약은 fixture 밖에서 미검증. ORB/BULL_FLAG 규칙과 portfolio recommender 계약은 미정의/미지원이며 별도 설계가 필요하다.
