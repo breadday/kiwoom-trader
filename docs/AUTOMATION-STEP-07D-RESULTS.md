@@ -45,8 +45,9 @@ PASS
 - 구현·테스트·문서 exact staged diff 독립 리뷰: `deleg_3881e7b6`, `passed=true`; security_concerns 및 logic_errors 없음.
 - 제안은 live Kiwoom 호환성/휴장일/조정가격 표현을 미검증으로 계속 명시하는 것뿐이며, 문서 제한사항에 반영되어 있다.
 - 사용자 Windows push 뒤 `refs/heads/feat/kiwoom-daily-chart-contract-stage-07d`를 재조회해 SHA `57ab90f2f9807e4c67606ea60fc44c5716bd9929`와 당시 local HEAD 일치를 확인했다.
-- 이 확인을 기록하는 현재 status-only 문서 커밋은 로컬에만 있으며 아직 push되지 않았다. Docker HTTPS 인증 누락으로 push 재시도 실패: `fatal: could not read Username for 'https://github.com': No such device or address`.
-- 구현/테스트 코드는 해당 문서 후속 변경에서 수정되지 않았다. 최종 로컬 커밋을 Windows에서 push한 뒤 현재 원격 SHA를 다시 확인해야 한다.
+- 사용자 Windows에서 문서 후속 커밋까지 push한 뒤 원격 SHA `e1b60292add4ccd635d7c49d9e4d6e63ca7e49d5`를 재조회해 local HEAD와 일치 확인.
+- Docker HTTPS 인증은 불가했으나 Windows push로 해결됐다. STEP 07D 구현/문서 단계는 원격 반영 완료.
+- 실제 Kiwoom 서버 호환성·휴장일·조정가격 표시 계약은 이 단계에서 호출하지 않아 미검증 상태다.
 
 ## 알려진 제한
 - fixture 통과는 실제 Kiwoom 실/모의 서버 호환성 증거가 아니다.
