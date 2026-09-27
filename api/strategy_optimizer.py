@@ -3,9 +3,11 @@
 전략 최적화 엔진 - 평가 기준을 못 잡겠을 때 자동으로 최적 파라미터 찾기
 """
 import itertools
-import random
-from typing import Dict, List
+import math
+import statistics
+from typing import Callable, Dict, List, Optional
 from dataclasses import dataclass
+from datetime import datetime
 
 @dataclass
 class BacktestResult:
@@ -25,182 +27,340 @@ class StrategyOptimizer:
     평가 기준 4가지를 종합 점수로 계산
     """
 
-    def __init__(self):
-        # 백테스트용 mock 데이터 - 실제로는 키움 일봉 데이터 사용
-        # 각 종목의 과거 60일 수익률 시뮬레이션
-        self.mock_history = {
-            "005935": {"volatility": 0.8, "trend": 0.2},  # 삼성전자우 - 낮은 변동
-            "061220": {"volatility": 2.5, "trend": -0.5}, # LB세미콘 - 하락
-            "067310": {"volatility": 1.8, "trend": 0.6},   # 하나마이크론 - 상승중
-            "086520": {"volatility": 3.5, "trend": -1.2}, # 에코프로 - 급락
-            "253590": {"volatility": 2.2, "trend": -0.3}, # 네오셈 - 하락
-            "272210": {"volatility": 2.0, "trend": -0.4}, # 한화시스템 - 하락
-            "441680": {"volatility": 4.0, "trend": -1.5}, # 스피어 - 대폭락
-            "416770": {"volatility": 2.8, "trend": -0.8}, # 신성에스티 - 하락
+    FACTOR_UNIVERSE = (
+        "005935", "061220", "067310", "086520",
+        "253590", "272210", "441680", "416770",
+    )
+    FACTOR_LOOKBACK_BARS = 252
+
+    def __init__(self, daily_chart_provider: Optional[Callable] = None):
+        self.daily_chart_provider = daily_chart_provider
+
+    @staticmethod
+    def _factor_percentiles(raw_scores: Dict[str, float], excluded_codes=()) -> Dict[str, float]:
+        if not raw_scores:
+            return {}
+        values = list(raw_scores.values())
+        if any(not math.isfinite(value) for value in values):
+            raise ValueError("factor scores must be finite")
+        ordered = sorted(values)
+        result = {}
+        count = len(ordered)
+        for code, value in raw_scores.items():
+            first = next(index for index, candidate in enumerate(ordered) if candidate == value)
+            last = count - 1 - next(index for index, candidate in enumerate(reversed(ordered)) if candidate == value)
+            average_rank = (first + last) / 2.0
+            percentile = 50.0 if count == 1 else average_rank / (count - 1) * 100.0
+            result[code] = 0.0 if code in excluded_codes else percentile
+        return result
+
+    @staticmethod
+    def _factor_measurements(bars: List[dict], end_index: int) -> Dict[str, float]:
+        history = bars[:end_index + 1]
+        if len(history) <= 252:
+            raise ValueError("FACTOR scoring requires more than 252 daily bars")
+        closes = [bar["close"] for bar in history]
+        volumes = [bar["volume"] for bar in history]
+        # Preserve FactorSwingStrategy's 252-row (inclusive of current bar) convention.
+        momentum = closes[-21] / closes[-252] - 1.0
+        returns = [closes[index] / closes[index - 1] - 1.0 for index in range(len(closes) - 60, len(closes))]
+        if any(not math.isfinite(value) for value in returns):
+            raise ValueError("factor measurements must be finite")
+        try:
+            volatility = statistics.stdev(returns)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError("factor measurements must be finite") from exc
+        if not math.isfinite(volatility):
+            raise ValueError("factor measurements must be finite")
+        lowvol = 1.0 / volatility if volatility > 0 else 0.0
+        quality = statistics.mean(volumes[-60:])
+        value_proxy = -(closes[-1] / closes[-60] - 1.0)
+        result = {"mom": momentum, "lowvol": lowvol, "quality": quality, "value": value_proxy}
+        if any(not math.isfinite(value) for value in result.values()):
+            raise ValueError("factor measurements must be finite")
+        return result
+
+    @staticmethod
+    def _exclude_low_quality(qualities: Dict[str, float]) -> set:
+        if any(not math.isfinite(value) for value in qualities.values()):
+            raise ValueError("factor quality values must be finite")
+        excluded_count = math.floor(len(qualities) * 0.3)
+        return {
+            code for code, _ in sorted(qualities.items(), key=lambda item: (item[1], item[0]))[:excluded_count]
         }
 
-    def simulate_trades(self, code: str, strategy_id: str, params: dict, days=60) -> BacktestResult:
-        """해당 전략/파라미터로 60일 백테스트 시뮬레이션"""
-        hist = self.mock_history.get(code, {"volatility": 2.0, "trend": -0.5})
-        vol = hist["volatility"]
-        trend = hist["trend"]
+    @staticmethod
+    def _daily_factor_percentiles(histories: Dict[str, List[dict]], end_index: int) -> Dict[str, float]:
+        factors = {
+            code: StrategyOptimizer._factor_measurements(bars, end_index)
+            for code, bars in histories.items()
+        }
 
-        # 파라미터에 따라 수익 시뮬레이션
-        # RESCUE 전략: 손절 기준이 타이트할수록 손실은 작지만 거래 많음
-        if strategy_id == "RESCUE":
-            immediate_th = params.get("immediate_th", -40)
-            partial_th = params.get("partial_th", -20)
-            # 손절을 빨리 할수록 MDD는 작아지지만, 반등 놓칠 수 있음
-            # 시뮬레이션: immediate_th가 -30이면 -50%까지 가는 걸 방지
-            base_return = -25  # 현재 평균 손실
-            if immediate_th >= -30:
-                base_return = -15  # 빨리 손절하면 추가 손실 방지
-                win_rate = 0.35
-                mdd = 12
-            elif immediate_th >= -40:
-                base_return = -22
-                win_rate = 0.45
-                mdd = 18
-            else:
-                base_return = -30
-                win_rate = 0.55
-                mdd = 28
+        zscores = {code: {} for code in factors}
+        for name in ("mom", "lowvol", "quality", "value"):
+            column = [item[name] for item in factors.values()]
+            mean = statistics.mean(column)
+            deviation = statistics.stdev(column) if len(column) > 1 else float("nan")
+            for code, item in factors.items():
+                zscores[code][name] = (item[name] - mean) / (deviation + 1e-9) if math.isfinite(deviation) else float("nan")
 
-            total_trades = 8 if immediate_th >= -30 else 4
-            sharpe = ( -base_return - 5) / (vol * 2) * -1  # 손실 최소화 관점
+        excluded = StrategyOptimizer._exclude_low_quality(
+            {code: item["quality"] for code, item in factors.items()}
+        )
+        raw_scores = {}
+        for code, item in factors.items():
+            z = zscores[code]
+            raw_scores[code] = z["mom"] * 0.4 + z["lowvol"] * 0.3 + z["quality"] * 0.2 + z["value"] * 0.1
+        return StrategyOptimizer._factor_percentiles(raw_scores, excluded)
 
-        elif strategy_id == "FACTOR":
-            factor_th_low = params.get("factor_low", 40)
-            factor_th_high = params.get("factor_high", 50)
-            base_return = -10 if factor_th_low < 35 else -18
-            win_rate = 0.5 if factor_th_low < 35 else 0.42
-            mdd = 15 if factor_th_low < 35 else 22
-            total_trades = 6
-            sharpe = 0.3 if factor_th_low < 35 else 0.1
+    def _simulate_factor_trade(self, code: str, bars: List[dict], factor_scores: List[float], days=60) -> BacktestResult:
+        if isinstance(days, bool) or not isinstance(days, int) or days <= 1:
+            raise ValueError("days must be an integer greater than 1")
+        if len(bars) != self.FACTOR_LOOKBACK_BARS + days or len(factor_scores) != days:
+            raise ValueError("FACTOR bars/scores do not match lookback and evaluation period")
+        bars = self._load_daily_bars(code, self.FACTOR_LOOKBACK_BARS + days, bars)
+        if any(not math.isfinite(score) or score < 0 or score > 100 for score in factor_scores):
+            raise ValueError("factor percentile scores must be finite values from 0 to 100")
+        entry_index = self.FACTOR_LOOKBACK_BARS
+        entry_price = bars[entry_index]["close"]
+        initial_quantity = 1.0 / entry_price
+        remaining_quantity = initial_quantity
+        cash = 0.0
+        partial_sold = False
+        partial_day = None
+        exit_day = days - 1
+        pending_action = None
+        equity_curve = [1.0]
+        # Score index 0 belongs to the virtual entry close; signal-day closes
+        # are known only after that close, so orders fill at the next session open.
+        for offset in range(1, days):
+            bar_index = entry_index + offset
+            bar = bars[bar_index]
+            if pending_action == "full":
+                cash += remaining_quantity * bar["open"]
+                remaining_quantity = 0.0
+                exit_day = offset
+            elif pending_action == "partial":
+                quantity_to_sell = initial_quantity * 0.5
+                cash += quantity_to_sell * bar["open"]
+                remaining_quantity -= quantity_to_sell
+                partial_day = offset
+            pending_action = None
 
-        elif strategy_id == "BULL_FLAG":
-            vol_drop_th = params.get("vol_drop_th", 0.5)
-            base_return = 5 if hist["trend"] > 0 else -12
-            win_rate = 0.62 if hist["trend"] > 0 else 0.38
-            mdd = 10
-            total_trades = 5
-            sharpe = 0.8 if hist["trend"] > 0 else -0.2
+            close = bar["close"]
+            current_date = datetime.strptime(bar["date"], "%Y%m%d")
+            if remaining_quantity > 0.0 and offset < days - 1 and current_date.weekday() == 0:
+                score = factor_scores[offset]
+                if score < 40.0:
+                    pending_action = "full"
+                elif not partial_sold and score < 50.0 and close > bars[bar_index - 1]["close"]:
+                    pending_action = "partial"
+                    partial_sold = True
+            equity_curve.append(cash + remaining_quantity * close)
+            if remaining_quantity == 0.0:
+                equity_curve.extend([cash] * (days - len(equity_curve)))
+                break
+        if remaining_quantity > 0.0:
+            cash += remaining_quantity * bars[-1]["close"]
+        final_equity = cash
+        daily_returns = [current / previous - 1.0 for previous, current in zip(equity_curve, equity_curve[1:]) if previous > 0]
+        sharpe = 0.0
+        if len(daily_returns) > 1:
+            deviation = statistics.stdev(daily_returns)
+            if deviation > 0:
+                sharpe = statistics.mean(daily_returns) / deviation * math.sqrt(252)
+        peak = 1.0
+        max_drawdown = 0.0
+        for equity in equity_curve:
+            peak = max(peak, equity)
+            if peak > 0:
+                max_drawdown = max(max_drawdown, (peak - equity) / peak * 100.0)
+        total_return = (final_equity - 1.0) * 100.0
+        win_rate = 1.0 if total_return > 0 else 0.0
+        avg_hold_days = (partial_day * 0.5 + exit_day * 0.5) if partial_sold else float(exit_day)
+        score = (total_return + 50.0) * 0.8 + (30.0 - max_drawdown) + win_rate * 30.0 + max(0.0, sharpe) * 10.0
+        return BacktestResult(
+            strategy_id="FACTOR",
+            params={"immediate_score": 40.0, "partial_score": 50.0, "partial_fraction": 0.5, "check_weekday": "Monday"},
+            total_return=total_return,
+            win_rate=win_rate,
+            max_drawdown=max_drawdown,
+            sharpe=sharpe,
+            avg_hold_days=avg_hold_days,
+            total_trades=1,
+            score=score,
+        )
 
-        else:  # ORB
-            stop_loss = params.get("stop_loss", -2.0)
-            base_return = -3 if stop_loss >= -1.5 else -8
-            win_rate = 0.48
-            mdd = 8
-            total_trades = 12
-            sharpe = 0.2
+    def simulate_factor_universe(self, days=60, daily_bars_by_code=None) -> Dict[str, BacktestResult]:
+        if isinstance(days, bool) or not isinstance(days, int) or days <= 1:
+            raise ValueError("days must be an integer greater than 1")
+        required_bars = self.FACTOR_LOOKBACK_BARS + days
+        if daily_bars_by_code is None:
+            if self.daily_chart_provider is None:
+                raise RuntimeError("daily chart provider is required for FACTOR backtests")
+            daily_bars_by_code = {
+                code: self.daily_chart_provider(code, limit=required_bars)
+                for code in self.FACTOR_UNIVERSE
+            }
+        if not isinstance(daily_bars_by_code, dict) or set(daily_bars_by_code) != set(self.FACTOR_UNIVERSE):
+            raise ValueError("daily bars must contain exactly the approved FACTOR universe")
+        histories = {
+            code: self._load_daily_bars(code, required_bars, daily_bars_by_code[code])
+            for code in self.FACTOR_UNIVERSE
+        }
+        reference_dates = [bar["date"] for bar in histories[self.FACTOR_UNIVERSE[0]]]
+        if any([bar["date"] for bar in history] != reference_dates for history in histories.values()):
+            raise ValueError("FACTOR universe daily bars must have the same dates")
+        score_series = {code: [] for code in self.FACTOR_UNIVERSE}
+        for end_index in range(self.FACTOR_LOOKBACK_BARS, required_bars):
+            daily_scores = self._daily_factor_percentiles(histories, end_index)
+            for code in self.FACTOR_UNIVERSE:
+                score_series[code].append(daily_scores[code])
+        return {
+            code: self._simulate_factor_trade(code, histories[code], score_series[code], days=days)
+            for code in self.FACTOR_UNIVERSE
+        }
 
-        # 종합 점수 계산 (네 상황: 손실 최소화 + MDD 최소화 + 승률)
-        # 평가 기준: 1. 총수익 40% 2. MDD 30% 3. 승률 20% 4. 샤프 10%
-        score = 0
-        score += (base_return + 50) * 0.8  # -50~+20 범위를 0~56점으로
-        score += (30 - mdd) * 1.0  # MDD 작을수록 좋음
-        score += win_rate * 30
-        score += max(0, sharpe) * 10
+    def _load_daily_bars(self, code: str, days: int, bars=None) -> List[dict]:
+        if isinstance(days, bool) or not isinstance(days, int) or days <= 1:
+            raise ValueError("days must be an integer greater than 1")
+        if bars is None:
+            if self.daily_chart_provider is None:
+                raise RuntimeError("daily chart provider is required for backtests")
+            bars = self.daily_chart_provider(code, limit=days)
+        if not isinstance(bars, list) or len(bars) != days:
+            actual = len(bars) if isinstance(bars, list) else "non-list"
+            raise ValueError(f"expected exactly {days} daily bars, received {actual}")
 
+        normalized = []
+        previous_date = None
+        for row in bars:
+            if not isinstance(row, dict):
+                raise ValueError("daily bars must contain mapping rows")
+            try:
+                bar_date = row["date"]
+                if not isinstance(bar_date, str) or len(bar_date) != 8 or not bar_date.isdigit():
+                    raise ValueError("invalid date")
+                datetime.strptime(bar_date, "%Y%m%d")
+                if previous_date is not None and bar_date <= previous_date:
+                    raise ValueError("daily bars must be unique and ascending by date")
+                prices = {name: float(row[name]) for name in ("open", "high", "low", "close")}
+                volume = int(row["volume"])
+                if any(not math.isfinite(value) or value <= 0 for value in prices.values()):
+                    raise ValueError("OHLC prices must be finite and positive")
+                if volume < 0 or prices["low"] > min(prices["open"], prices["close"]) or prices["high"] < max(prices["open"], prices["close"]):
+                    raise ValueError("daily OHLCV row is inconsistent")
+            except (KeyError, TypeError, ValueError, OverflowError) as exc:
+                raise ValueError(f"invalid daily chart row: {row!r}") from exc
+            normalized.append({**prices, "date": bar_date, "volume": volume})
+            previous_date = bar_date
+        return normalized
+
+    def simulate_trades(self, code: str, strategy_id: str, params: dict, days=60, daily_bars=None) -> BacktestResult:
+        """Backtest one RESCUE position using injected daily bars only.
+
+        Enter at the first close, check sell thresholds at subsequent daily
+        closes, sell half once at the partial threshold, and value any remainder
+        at the final close. Fees and slippage are not modeled.
+        """
+        if strategy_id != "RESCUE":
+            raise NotImplementedError("daily OHLCV backtest currently supports RESCUE only")
+        bars = self._load_daily_bars(code, days, daily_bars)
+        immediate_th = float(params.get("immediate_th", -40))
+        partial_th = float(params.get("partial_th", -20))
+        if not math.isfinite(immediate_th) or not math.isfinite(partial_th):
+            raise ValueError("RESCUE thresholds must be finite numbers")
+        if immediate_th >= 0 or partial_th >= 0 or partial_th <= immediate_th:
+            raise ValueError("thresholds must satisfy immediate_th < partial_th < 0")
+
+        entry_price = bars[0]["close"]
+        initial_quantity = 1.0 / entry_price
+        remaining_quantity = initial_quantity
+        cash = 0.0
+        partial_sold = False
+        partial_day = None
+        exit_day = days - 1
+        equity_curve = [1.0]
+
+        for day_index, bar in enumerate(bars[1:], start=1):
+            close = bar["close"]
+            pnl_pct = (close / entry_price - 1.0) * 100.0
+            immediate_price = entry_price * (1.0 + immediate_th / 100.0)
+            partial_price = entry_price * (1.0 + partial_th / 100.0)
+            if close <= immediate_price:
+                cash += remaining_quantity * close
+                remaining_quantity = 0.0
+                exit_day = day_index
+            elif not partial_sold and close <= partial_price:
+                quantity_to_sell = initial_quantity * 0.5
+                cash += quantity_to_sell * close
+                remaining_quantity -= quantity_to_sell
+                partial_sold = True
+                partial_day = day_index
+
+            equity_curve.append(cash + remaining_quantity * close)
+            if remaining_quantity == 0.0:
+                equity_curve.extend([cash] * (days - len(equity_curve)))
+                break
+
+        if remaining_quantity > 0.0:
+            cash += remaining_quantity * bars[-1]["close"]
+        final_equity = cash
+        daily_returns = [current / previous - 1.0 for previous, current in zip(equity_curve, equity_curve[1:]) if previous > 0]
+        sharpe = 0.0
+        if len(daily_returns) > 1:
+            deviation = statistics.stdev(daily_returns)
+            if deviation > 0:
+                sharpe = statistics.mean(daily_returns) / deviation * math.sqrt(252)
+
+        peak = 1.0
+        max_drawdown = 0.0
+        for equity in equity_curve:
+            peak = max(peak, equity)
+            if peak > 0:
+                max_drawdown = max(max_drawdown, (peak - equity) / peak * 100.0)
+
+        total_return = (final_equity - 1.0) * 100.0
+        win_rate = 1.0 if total_return > 0 else 0.0
+        avg_hold_days = (partial_day * 0.5 + exit_day * 0.5) if partial_sold else float(exit_day)
+        score = (total_return + 50.0) * 0.8 + (30.0 - max_drawdown) + win_rate * 30.0 + max(0.0, sharpe) * 10.0
         return BacktestResult(
             strategy_id=strategy_id,
-            params=params,
-            total_return=base_return,
+            params=dict(params),
+            total_return=total_return,
             win_rate=win_rate,
-            max_drawdown=mdd,
+            max_drawdown=max_drawdown,
             sharpe=sharpe,
-            avg_hold_days=random.uniform(5, 20),
-            total_trades=total_trades,
-            score=score
+            avg_hold_days=avg_hold_days,
+            total_trades=1,
+            score=score,
         )
 
     def optimize_rescue(self, code: str) -> List[BacktestResult]:
         """RESCUE 전략 최적화 - 네 -945만원 회복용"""
         results = []
-        # 즉시정리 기준 -25 ~ -50, 분할매도 기준 -10 ~ -30 그리드 서치
+        bars = self._load_daily_bars(code, 60)
+        # Reuse one verified snapshot for every parameter set; do not issue one
+        # market-data request per grid point.
         for immediate_th in [-25, -30, -35, -40, -45, -50]:
             for partial_th in [-10, -15, -20, -25]:
                 if partial_th <= immediate_th:  # 분할매도(-20)가 즉시정리(-40)보다 높아야 함 ( -20 > -40 )
                     continue
                 params = {"immediate_th": immediate_th, "partial_th": partial_th}
-                res = self.simulate_trades(code, "RESCUE", params)
+                res = self.simulate_trades(code, "RESCUE", params, days=60, daily_bars=bars)
                 results.append(res)
         return sorted(results, key=lambda x: x.score, reverse=True)
 
     def optimize_factor(self, code: str) -> List[BacktestResult]:
-        results = []
-        for low in [30, 35, 40, 45]:
-            for high in [45, 50, 55, 60]:
-                if low >= high:
-                    continue
-                params = {"factor_low": low, "factor_high": high}
-                res = self.simulate_trades(code, "FACTOR", params)
-                results.append(res)
-        return sorted(results, key=lambda x: x.score, reverse=True)
+        if code not in self.FACTOR_UNIVERSE:
+            raise ValueError("code must belong to the approved FACTOR universe")
+        return [self.simulate_factor_universe()[code]]
 
     def optimize_all_strategies(self, code: str) -> Dict[str, List[BacktestResult]]:
-        """해당 종목에 대해 모든 전략 최적화"""
-        return {
-            "RESCUE": self.optimize_rescue(code),
-            "FACTOR": self.optimize_factor(code),
-        }
+        raise NotImplementedError("daily optimization is unavailable for ORB/BULL_FLAG until their data-driven rules are defined")
 
     def recommend_for_portfolio(self, codes: List[str]) -> Dict[str, dict]:
-        """네 8종목 포트폴리오 전체에 대한 추천"""
-        recommendations = {}
-        for code in codes:
-            hist = self.mock_history.get(code, {"trend": -0.5})
-            # 트렌드에 따라 전략 추천
-            if hist["trend"] < -1.0:
-                # 대폭락 종목 - RESCUE 빠르게
-                resc = self.optimize_rescue(code)
-                if not resc:
-                    continue
-                best = resc[0]
-                recommendations[code] = {
-                    "recommended_strategy": "RESCUE",
-                    "params": best.params,
-                    "reason": f"대폭락 추세 {hist['trend']}, 빠른 손절 필요",
-                    "expected_return": best.total_return,
-                    "result": best
-                }
-            elif hist["trend"] < -0.2:
-                # 하락 종목 - FACTOR 반등 매도
-                fac = self.optimize_factor(code)
-                if not fac:
-                    continue
-                best = fac[0]
-                recommendations[code] = {
-                    "recommended_strategy": "FACTOR",
-                    "params": best.params,
-                    "reason": f"하락 추세, 팩터 반등시 매도",
-                    "expected_return": best.total_return,
-                    "result": best
-                }
-            else:
-                # 상승/횡보 - BULL_FLAG
-                recommendations[code] = {
-                    "recommended_strategy": "BULL_FLAG",
-                    "params": {"vol_drop_th": 0.5},
-                    "reason": f"상승 추세 {hist['trend']}, 추세 추종",
-                    "expected_return": 5,
-                    "result": None
-                }
-        return recommendations
+        raise NotImplementedError("data-driven portfolio recommendations require explicit per-strategy rules")
 
 if __name__ == "__main__":
-    opt = StrategyOptimizer()
-
-    # 네 8종목 최적화
-    codes = ["005935", "061220", "067310", "086520", "253590", "272210", "441680", "416770"]
-    recos = opt.recommend_for_portfolio(codes)
-
-    print("=== 네 포트폴리오 최적화 추천 ===")
-    for code, rec in recos.items():
-        print(f"{code}: {rec['recommended_strategy']} {rec['params']} - {rec['reason']} 예상 {rec['expected_return']}%")
-
-    # 스피어 상세 최적화
-    print("\n=== 스피어(441680) RESCUE 상세 ===")
-    results = opt.optimize_rescue("441680")
-    for r in results[:5]:
-        print(f"즉시{ r.params['immediate_th']}%/분할{ r.params['partial_th']}% -> 수익 {r.total_return}% MDD {r.max_drawdown}% 승률 {r.win_rate:.0%} 점수 {r.score:.1f}")
+    print("Configure StrategyOptimizer(daily_chart_provider=kiwoom_api.get_daily_chart) before running a backtest.")

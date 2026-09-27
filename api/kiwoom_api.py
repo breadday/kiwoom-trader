@@ -1,5 +1,5 @@
 import requests, time, random
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from .kiwoom_auth import KiwoomAuth
 
 class KiwoomAPI:
@@ -28,8 +28,13 @@ class KiwoomAPI:
         r = requests.post(url, headers=self.auth.headers(), json={"stk_cd": code, "tic_scope": tick})
         return r.json().get("chart", [])
 
-    def get_daily_chart(self, code, base_dt="00000000", limit=60, max_pages=10):
+    def get_daily_chart(self, code, base_dt=None, limit=60, max_pages=10):
         """Read adjusted daily OHLCV bars from Kiwoom ka10081.
+
+        The official contract requires YYYYMMDD. If omitted, use the previous
+        KST calendar date so an unfinished current-session bar is not selected;
+        callers may provide a date explicitly. For adjusted history, the base
+        date must be after the relevant corporate-action date.
 
         This is a read-only market-data request and is deliberately independent
         of the paper/real order mode. It never places or simulates an order.
@@ -37,13 +42,15 @@ class KiwoomAPI:
         """
         if not isinstance(code, str) or not code.strip():
             raise ValueError("code must be a non-empty stock code")
-        if not isinstance(base_dt, str) or (base_dt != "00000000" and (len(base_dt) != 8 or not base_dt.isdigit())):
-            raise ValueError("base_dt must be YYYYMMDD or 00000000")
+        if base_dt is None:
+            kst = timezone(timedelta(hours=9))
+            base_dt = (datetime.now(kst).date() - timedelta(days=1)).strftime("%Y%m%d")
+        if not isinstance(base_dt, str) or len(base_dt) != 8 or not base_dt.isdigit():
+            raise ValueError("base_dt must be a valid YYYYMMDD date")
         try:
-            if base_dt != "00000000":
-                datetime.strptime(base_dt, "%Y%m%d")
+            datetime.strptime(base_dt, "%Y%m%d")
         except ValueError as exc:
-            raise ValueError("base_dt must be a valid YYYYMMDD date or 00000000") from exc
+            raise ValueError("base_dt must be a valid YYYYMMDD date") from exc
         if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
             raise ValueError("limit must be a positive integer")
         if isinstance(max_pages, bool) or not isinstance(max_pages, int) or max_pages <= 0:

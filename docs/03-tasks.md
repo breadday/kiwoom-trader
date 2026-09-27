@@ -26,8 +26,10 @@
   - 완료조건: split 뷰, 현재 -44% vs 최적 -15% 개선 표시
 
 - [ ] T7: 실제 키움 일봉 연동 백테스트
-  - 파일: /api/strategy_optimizer.py get_daily_chart 연동
-  - 완료조건: mock_history 대신 실제 60일 데이터로 최적화
+  - 파일: /api/kiwoom_api.py, /api/strategy_optimizer.py, /docs/AUTOMATION-STEP-07*.md
+  - 완료조건: 읽기 전용 일봉 조회를 최적화 계산에 연결하고, 확정된 전략/데이터 계약으로 검증
+  - 진행: STEP 07A~07F 구현·검증 및 독립 리뷰 완료. STEP 07F commit `7924a48f2d9b2bf1506f51a383f203382a331d8f`는 로컬 filtered history에 있고, STEP 08 이후 계획은 `docs/AUTOMATION-STEP-08-PLAN.md` 참조. 50개 전체 테스트 및 STEP 07F 전용 7개 테스트 통과.
+  - 남음: 최종 STEP 07F/handoff HEAD를 GitHub의 rewritten `main` 및 stage refs에 atomic `--force-with-lease`로 반영하고 전체 ref SHA를 readback해야 한다. 현재 container GitHub 인증은 미설정이라 원격은 기존 SHA 상태. 실제 Kiwoom 응답·페이지네이션·가격부호·휴장일 호환성은 미검증; ORB/BULL_FLAG 및 portfolio recommender 계약 미정의로 fail-closed. Force-push로 다른 clone/fork/cache/server object의 물리 삭제를 보장하지 않는다.
 
 - [ ] T8: Vercel 배포 + accounts.yaml 실전 전환 가이드
   - 파일: /docs/deployment.md
