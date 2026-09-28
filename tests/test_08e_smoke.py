@@ -1,7 +1,9 @@
 import os
 import unittest
+from http.server import BaseHTTPRequestHandler
 from unittest.mock import patch
 
+from api.index import _status_payload, handler
 from api.kiwoom_api import KiwoomAPI
 from order import LiveOrderDisabledError
 
@@ -89,6 +91,41 @@ class Step08ESmokeTests(unittest.TestCase):
                 api.sell_market("005930", 1)
 
         post.assert_not_called()
+
+    def test_vercel_entrypoint_is_paper_only_and_readonly(self):
+        with patch.dict(
+            os.environ,
+            {
+                "KIWOOM_APP_KEY": "vercel-test-app-key",
+                "KIWOOM_APP_SECRET": "vercel-test-app-secret",
+            },
+            clear=False,
+        ), patch("api.index.KiwoomAPI") as api_class:
+            response = _status_payload()
+
+        api_class.assert_called_once_with(
+            app_key="vercel-test-app-key",
+            app_secret="vercel-test-app-secret",
+            paper=True,
+        )
+        self.assertEqual(
+            response,
+            {"ok": True, "mode": "paper", "readonly": True},
+        )
+
+    def test_vercel_handler_uses_supported_python_runtime_contract(self):
+        self.assertTrue(issubclass(handler, BaseHTTPRequestHandler))
+
+    def test_explicit_credentials_do_not_enable_live_mode(self):
+        api = KiwoomAPI(
+            app_key="explicit-test-app-key",
+            app_secret="explicit-test-app-secret",
+            paper=True,
+        )
+
+        self.assertTrue(api.is_paper)
+        self.assertEqual(api.auth.app_key, "explicit-test-app-key")
+        self.assertEqual(api.auth.app_secret, "explicit-test-app-secret")
 
 
 if __name__ == "__main__":

@@ -10,3 +10,6 @@ __pycache__/
 automation/runs/
 .tmp-pydeps/
 .tmp-uv-cache/
+.venv/
+.uv-cache/
+.npm-cache/

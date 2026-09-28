@@ -6,11 +6,11 @@
 제공한다. 실계좌 주문 제출은 지원 범위가 아니며, `paper=False` 주문은
 fail-closed여야 한다.
 
-현재 저장소에는 Vercel 애플리케이션 설정(`vercel.json`, `package.json`)이
-없다. `KiwoomAPI`는 `KIWOOM_APP_KEY`, `KIWOOM_APP_SECRET`, 선택적
-`KIWOOM_BASE_URL` 환경변수에서 auth를 구성할 수 있지만, 이 값들은 실제
-endpoint 호출 승인 전까지 제공하지 않는다. 이 문서는 배포 명령이 아니라,
-배포를 승인하기 전에 충족해야 할 안전 조건을 정의한다.
+현재 저장소에는 Vercel Python entrypoint(`api/index.py`)와 함수 설정
+(`vercel.json`)이 있다. entrypoint는 `KIWOOM_APP_KEY`와
+`KIWOOM_APP_SECRET`을 환경변수에서 읽고 `paper=True`를 고정하며,
+broker 요청 없이 read-only 상태만 반환한다. 실제 endpoint 호출은 별도
+승인 전까지 연결하지 않는다.
 
 ## 배포 전 필수 검사
 
@@ -22,9 +22,8 @@ python -m compileall -q api tests
 git diff --check
 ```
 
-- 전체 unittest discovery가 `OK`가 아니면 배포하지 않는다. 현재 Python 3.11
-  runner와 CPython 3.14용 `.tmp-pydeps` native wheel이 불일치하므로,
-  dependency 환경을 먼저 복구한다.
+- 전체 unittest discovery가 `OK`가 아니면 배포하지 않는다. CPython 3.14용
+  `.tmp-pydeps`를 사용할 때는 반드시 CPython 3.14 interpreter로 실행한다.
 - `accounts.yaml`, `.env`, `config_live.py`, `*.key`, `token.json`을 commit하지 않는다.
 - API key, secret, token, account number를 로그·fixture·문서·채팅에 출력하지 않는다.
 - 합성 데모 결과를 실거래 성과나 매수 추천으로 표시하지 않는다.
@@ -52,9 +51,19 @@ git diff --check
 - secret 노출이 의심되면 즉시 사용 중지·회전하고 로그와 build artifact를
   점검한다.
 
+Vercel 프로젝트 연결과 CLI 인증이 준비된 승인 환경에서만 다음을 실행한다.
+
+```powershell
+vercel env add KIWOOM_APP_KEY
+vercel env add KIWOOM_APP_SECRET
+vercel --prod
+```
+
+입력한 secret 값과 access token은 명령 출력이나 배포 로그에 남기지 않는다.
+
 ## 단계적 운영 순서
 
-1. 오프라인 fixture 및 전체 76개 테스트 통과
+1. 오프라인 fixture 및 전체 81개 테스트 통과
 2. 승인된 환경에서 read-only `ka10081` smoke test
 3. 응답 page size/rate limit/휴장일/가격 부호 확인
 4. paper/mock 주문 안전성 회귀 확인
@@ -65,7 +74,7 @@ git diff --check
 
 - GitHub rewritten refs의 atomic publication 및 원격 SHA readback
 - 승인된 Kiwoom read-only 실행 환경에서의 08E smoke test
-- Vercel 프로젝트 설정과 안전한 credential 주입 entrypoint
+- Vercel 프로젝트 연결, secret 등록, production 배포 및 로그 readback
 - 실전 주문 전환 승인 및 운영 통제
 
 Gate 0 원격 publication은 저장소의

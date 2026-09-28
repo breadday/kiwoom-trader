@@ -14,11 +14,12 @@
 - `api/strategy_engine.py`: `run_single` and `run_selected` execution paths.
 - `api/daily.py`: bounded TTL/LRU daily-chart cache connected to `KiwoomAPI`.
 - `api/strategy_optimizer.py`: daily-bar provider injection for RESCUE and FACTOR backtests.
+- `api/index.py`: Vercel Python handler with environment-injected credentials and hard-coded paper mode.
 
 ## Verification
 
-- STEP 08E offline smoke and focused daily-chart/optimizer regression pass 52 tests.
-- Full discovery is currently blocked by CPython 3.14 NumPy/Pandas binaries in repository-local `.tmp-pydeps` while the runner is Python 3.11; no external package installation was performed.
+- Full discovery passes 81 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
+- The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
 - The offline demo runner preloads trusted numerical dependencies before installing process/network guards, preventing pandas platform initialization from being misclassified as demo execution.
 - Fixture contract tests cover `ka10081`, `POST /api/dostk/chart`, continuation headers, normalized OHLCV rows, and fail-closed malformed responses.
 
@@ -26,5 +27,5 @@
 
 1. Complete Gate 0: publish the rewritten refs with the guarded Windows bundle and verify all seven remote ref SHAs.
 2. STEP 08E read-only Kiwoom smoke test is documented but blocked until an approved credential/network environment is available.
-3. T8 deployment safety guide is documented; actual Vercel deployment and live-account transition remain disabled until separately approved and wired through a reviewed secret entrypoint.
+3. T8 entrypoint and deployment safety guide are implemented; actual Vercel deployment is blocked on CLI network approval, authentication, project linking, and secret registration. Live-account transition remains disabled.
 4. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.

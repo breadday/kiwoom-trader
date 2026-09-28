@@ -6,12 +6,28 @@ from .daily import DailyChartCache
 from order import LiveOrderDisabledError, OrderRequest, OrderSide, OrderType
 
 class KiwoomAPI:
-    def __init__(self, auth=None, paper=True):
+    def __init__(
+        self,
+        auth=None,
+        paper=True,
+        *,
+        app_key=None,
+        app_secret=None,
+        base_url=None,
+    ):
+        if auth is not None and any(
+            value is not None for value in (app_key, app_secret, base_url)
+        ):
+            raise ValueError("auth cannot be combined with explicit credentials")
         if auth is None:
             auth = KiwoomAuth(
-                os.getenv("KIWOOM_APP_KEY", ""),
-                os.getenv("KIWOOM_APP_SECRET", ""),
-                os.getenv("KIWOOM_BASE_URL", "https://api.kiwoom.com"),
+                app_key if app_key is not None else os.getenv("KIWOOM_APP_KEY", ""),
+                app_secret
+                if app_secret is not None
+                else os.getenv("KIWOOM_APP_SECRET", ""),
+                base_url
+                if base_url is not None
+                else os.getenv("KIWOOM_BASE_URL", "https://api.kiwoom.com"),
             )
         self.auth = auth
         self.paper = paper
