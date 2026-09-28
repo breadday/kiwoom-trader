@@ -2,7 +2,7 @@
 자동화 진행상황
 
 - [x] daily.py 캐싱
-- [ ] 주문 자동화
+- [x] 주문 안전성 구현 (dry-run/mock only, live order blocked)
 - [ ] 스캔 자동화
 - [ ] 텔레그램 알림
 
@@ -18,3 +18,10 @@
 - `get_daily_chart("005930", refresh=True)`로 해당 조건을 무효화하고 재조회.
 - `api.clear_daily_cache()`로 인스턴스 전체 캐시 삭제.
 - 기본값 및 명시적 당일 조회 모두 TTL 적용: 최신 값이 즉시 필요하면 `refresh=True` 사용.
+
+## 현재 검증 상태
+
+- 주문·전략·일봉·optimizer 안전성 테스트 43개 통과.
+- `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
+- 전체 테스트는 실행 환경에 `pandas`가 없어 3개 demo 테스트가 차단됨.
+- 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
