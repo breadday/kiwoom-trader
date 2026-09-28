@@ -15,11 +15,13 @@
 - `api/daily.py`: bounded TTL/LRU daily-chart cache connected to `KiwoomAPI`.
 - `api/strategy_optimizer.py`: daily-bar provider injection for RESCUE and FACTOR backtests.
 - `api/index.py`: Vercel Python handler with environment-injected credentials and hard-coded paper mode.
+- `api/scanner.py`: explicit-universe read-only scanner and bounded/stoppable result runner with no order dependency.
 
 ## Verification
 
-- Full discovery passes 81 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
+- Full discovery passes 86 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
 - The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
+- Scan automation isolates provider/evaluator failures per symbol, validates daily bars before evaluation, and publishes result batches only through an injected sink.
 - The offline demo runner preloads trusted numerical dependencies before installing process/network guards, preventing pandas platform initialization from being misclassified as demo execution.
 - Fixture contract tests cover `ka10081`, `POST /api/dostk/chart`, continuation headers, normalized OHLCV rows, and fail-closed malformed responses.
 
