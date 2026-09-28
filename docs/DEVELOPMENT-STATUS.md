@@ -25,6 +25,6 @@
 ## Remaining gates
 
 1. Complete Gate 0: publish the rewritten refs with the guarded Windows bundle and verify all seven remote ref SHAs.
-2. Run a read-only Kiwoom market-data smoke test only after explicit credential/network approval.
-3. Keep T8 deployment and live-account transition disabled until separately approved.
+2. STEP 08E read-only Kiwoom smoke test is documented but blocked until an approved credential/network environment is available.
+3. T8 deployment safety guide is documented; actual Vercel deployment and live-account transition remain disabled until separately approved and wired through a reviewed secret entrypoint.
 4. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.

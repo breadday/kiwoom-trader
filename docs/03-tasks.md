@@ -29,8 +29,10 @@
   - 파일: /api/kiwoom_api.py, /api/strategy_optimizer.py, /docs/AUTOMATION-STEP-07*.md
   - 완료조건: 읽기 전용 일봉 조회를 최적화 계산에 연결하고, 확정된 전략/데이터 계약으로 검증
   - 진행: STEP 07A~07F 구현·검증 및 독립 리뷰 완료. STEP 08A~08D의 공식 계약 조사, fixture 페이지네이션 회귀, provider 경계, 성과지표 검증을 완료했다. 저장소 로컬 `.tmp-pydeps` 경로를 사용해 전체 76개 unittest와 compileall이 통과했다. 세부 결과는 `docs/AUTOMATION-STEP-08{A,B,C,D}-RESULTS.md` 참조.
-  - 남음: 최종 STEP 07F/handoff HEAD를 GitHub의 rewritten `main` 및 stage refs에 atomic `--force-with-lease`로 반영하고 전체 ref SHA를 readback해야 한다. 현재 container GitHub 인증/네트워크가 미설정이라 원격 확인이 막혀 있다. 실제 Kiwoom 응답·페이지네이션·가격부호·휴장일 호환성은 승인된 read-only smoke test 전까지 미검증; ORB/BULL_FLAG 및 portfolio recommender 계약은 fail-closed. Force-push로 다른 clone/fork/cache/server object의 물리 삭제를 보장하지 않는다.
+  - 남음: 최종 STEP 07F/handoff HEAD를 GitHub의 rewritten `main` 및 stage refs에 atomic `--force-with-lease`로 반영하고 전체 ref SHA를 readback해야 한다. `docs/AUTOMATION-STEP-08E-{PLAN,TEST,RESULTS}.md`에 실제 smoke test의 승인 조건과 현재 차단 근거를 기록했다. 현재 container GitHub 인증/네트워크와 승인된 Kiwoom read-only 실행 환경이 없어 원격 publication/read-only smoke test는 미완료다. ORB/BULL_FLAG 및 portfolio recommender 계약은 fail-closed. Force-push로 다른 clone/fork/cache/server object의 물리 삭제를 보장하지 않는다.
 
 - [ ] T8: Vercel 배포 + accounts.yaml 실전 전환 가이드
   - 파일: /docs/deployment.md
+  - 진행: `/docs/deployment.md` 안전 가이드 작성 완료.
+  - 남음: 현재 저장소에 Vercel 앱 설정·secret 주입 entrypoint가 없고, 실제 배포·실전 전환은 별도 승인 전 금지.
   - 완료조건: paper=False 전환 시 안전 체크리스트
