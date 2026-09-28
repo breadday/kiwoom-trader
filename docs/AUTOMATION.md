@@ -4,7 +4,7 @@
 - [x] daily.py 캐싱
 - [x] 주문 안전성 구현 (dry-run/mock only, live order blocked)
 - [x] 스캔 자동화 (read-only provider/evaluator/sink 분리, 주문 실행 없음)
-- [ ] 텔레그램 알림
+- [x] 텔레그램 알림 (MATCH/ERROR 전용 result sink, 환경변수 자격증명)
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -21,7 +21,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔 안전성 테스트 86개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램 안전성 테스트 92개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -36,5 +36,18 @@
   다른 종목 스캔은 계속한다.
 - `ScanRunner`는 결과 sink로만 batch를 전달한다. broker/order 모듈을 사용하지
   않으며 `max_cycles` 또는 stop event로 안전하게 중단할 수 있다.
-- 다음 텔레그램 단계에서는 주문 기능을 추가하지 않고 결과 sink adapter만
-  연결한다.
+- 텔레그램 단계에서도 주문 기능을 추가하지 않고 결과 sink adapter만 연결했다.
+
+## 텔레그램 알림 구현
+
+- `api/telegram_notifications.py`의 `TelegramScanResultSink`를
+  `ScanRunner(result_sink=...)`에 주입한다. 주문·계좌 모듈 의존성은 없다.
+- 자격증명은 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경변수에서만 읽으며
+  누락되거나 형식이 잘못되면 네트워크 호출 전에 실패한다.
+- `MATCH`와 `ERROR`만 한 번의 plain-text batch 알림으로 전송한다.
+  `NO_MATCH`만 있는 주기는 전송하지 않아 반복 알림을 제한한다.
+- Telegram 응답 실패와 전송 예외는 토큰, 요청 URL, 응답 본문을 노출하지 않는
+  `TelegramDeliveryError`로 변환한다.
+- 메시지는 4,000자로 제한하며 초과 항목 수를 표시한다.
+- 실제 Telegram 전송은 운영 토큰과 채팅 ID가 등록된 승인 네트워크 환경에서만
+  수행한다. 현재 검증은 주입한 가짜 transport를 사용해 외부 전송 없이 완료했다.

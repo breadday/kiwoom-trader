@@ -9,6 +9,7 @@ __pycache__/
 *.pyo
 automation/runs/
 .tmp-pydeps/
+.tmp-test-venv/
 .tmp-uv-cache/
 .venv/
 .uv-cache/
