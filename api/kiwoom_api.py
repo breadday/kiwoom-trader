@@ -1,6 +1,8 @@
 import requests, time, random
 from datetime import datetime, timedelta, timezone
 from .kiwoom_auth import KiwoomAuth
+from .daily import DailyChartCache
+from order import LiveOrderDisabledError, OrderRequest, OrderSide, OrderType
 
 class KiwoomAPI:
     def __init__(self, auth: KiwoomAuth, paper=True):
@@ -10,6 +12,7 @@ class KiwoomAPI:
         self.base_paper = f"{auth.base_url}/api/mock" # 키움 모의투자 prefix (가정, 실제로는 동일 URL에 계좌구분)
         self.base = self.base_paper if paper else self.base_real
         self.last_req = 0
+        self._daily_cache = DailyChartCache()
         self.paper_balance = {"cash": 10000000, "positions": {}}
         print(f"[MODE] {'모의투자' if paper else '실전'} 모드")
 
@@ -28,7 +31,11 @@ class KiwoomAPI:
         r = requests.post(url, headers=self.auth.headers(), json={"stk_cd": code, "tic_scope": tick})
         return r.json().get("chart", [])
 
-    def get_daily_chart(self, code, base_dt=None, limit=60, max_pages=10):
+    def clear_daily_cache(self):
+        """Invalidate all daily chart results held by this API instance."""
+        self._daily_cache.clear()
+
+    def get_daily_chart(self, code, base_dt=None, limit=60, max_pages=10, *, refresh=False):
         """Read adjusted daily OHLCV bars from Kiwoom ka10081.
 
         The official contract requires YYYYMMDD. If omitted, use the previous
@@ -39,6 +46,8 @@ class KiwoomAPI:
         This is a read-only market-data request and is deliberately independent
         of the paper/real order mode. It never places or simulates an order.
         Returns normalized bars in ascending date order.
+        Successful nonempty results are cached per instance for five minutes.
+        Use refresh=True to invalidate and reload this request's cached result.
         """
         if not isinstance(code, str) or not code.strip():
             raise ValueError("code must be a non-empty stock code")
@@ -55,7 +64,16 @@ class KiwoomAPI:
             raise ValueError("limit must be a positive integer")
         if isinstance(max_pages, bool) or not isinstance(max_pages, int) or max_pages <= 0:
             raise ValueError("max_pages must be a positive integer")
+        if not isinstance(refresh, bool):
+            raise ValueError("refresh must be a boolean")
         url = f"{self.auth.base_url.rstrip('/')}/api/dostk/chart"
+        cache_key = (url, code, base_dt, limit, max_pages, "1")
+        if refresh:
+            self._daily_cache.discard(cache_key)
+        else:
+            cached = self._daily_cache.get(cache_key)
+            if cached is not None:
+                return cached
         bars_by_date = {}
         total_rows = 0
         continuation = None
@@ -137,37 +155,65 @@ class KiwoomAPI:
             seen_next_keys.add(next_key)
             continuation = next_key
 
-        return [bars_by_date[date] for date in sorted(bars_by_date)[-limit:]]
+        bars = [bars_by_date[date] for date in sorted(bars_by_date)[-limit:]]
+        self._daily_cache.put(cache_key, bars)
+        return bars
 
     def buy_market(self, code, qty, price=50000):
+        request = OrderRequest(code, OrderSide.BUY, qty, OrderType.MARKET)
+        if not isinstance(price, int) or isinstance(price, bool) or price <= 0:
+            raise ValueError("price must be a positive integer")
+        if not self.paper:
+            raise LiveOrderDisabledError(
+                "KiwoomAPI live order submission is disabled; use an explicitly approved adapter"
+            )
+
         self._throttle()
-        if self.paper:
-            cost = qty * price
-            if self.paper_balance["cash"] >= cost:
-                self.paper_balance["cash"] -= cost
-                pos = self.paper_balance["positions"].get(code, {"qty":0,"avg":0})
-                total = pos["qty"]*pos["avg"] + cost
-                pos["qty"] += qty
-                pos["avg"] = total / pos["qty"]
-                self.paper_balance["positions"][code] = pos
-                print(f"[PAPER BUY] {code} {qty}주 @{price} 잔고 {self.paper_balance['cash']:,}")
-                return {"order_no": "paper_"+str(int(time.time())), "status":"filled"}
-        # 실전
-        url = f"{self.base}/v1/trading/order"
-        return requests.post(url, headers=self.auth.headers(), json={"stk_cd": code, "ord_qty": str(qty), "trde_tp": "3"}).json()
+        cost = qty * price
+        if self.paper_balance["cash"] < cost:
+            return {
+                "order_no": None,
+                "status": "rejected",
+                "reason": "insufficient paper cash",
+                "code": request.code,
+                "qty": request.quantity,
+            }
+
+        self.paper_balance["cash"] -= cost
+        pos = self.paper_balance["positions"].get(code, {"qty": 0, "avg": 0})
+        total = pos["qty"] * pos["avg"] + cost
+        pos["qty"] += qty
+        pos["avg"] = total / pos["qty"]
+        self.paper_balance["positions"][code] = pos
+        print(f"[PAPER BUY] {code} {qty}주 @{price} 잔고 {self.paper_balance['cash']:,}")
+        return {"order_no": "paper_" + str(int(time.time())), "status": "filled"}
 
     def sell_market(self, code, qty, price=50000):
+        request = OrderRequest(code, OrderSide.SELL, qty, OrderType.MARKET)
+        if not isinstance(price, int) or isinstance(price, bool) or price <= 0:
+            raise ValueError("price must be a positive integer")
+        if not self.paper:
+            raise LiveOrderDisabledError(
+                "KiwoomAPI live order submission is disabled; use an explicitly approved adapter"
+            )
+
         self._throttle()
-        if self.paper:
-            pos = self.paper_balance["positions"].get(code)
-            if pos and pos["qty"] >= qty:
-                self.paper_balance["cash"] += qty * price
-                pos["qty"] -= qty
-                if pos["qty"]==0: del self.paper_balance["positions"][code]
-                print(f"[PAPER SELL] {code} {qty}주 @{price} 잔고 {self.paper_balance['cash']:,}")
-                return {"status":"filled"}
-        url = f"{self.base}/v1/trading/order"
-        return requests.post(url, headers=self.auth.headers(), json={"stk_cd": code, "ord_qty": str(qty), "trde_tp": "3", "trde_sec_tp":"1"}).json()
+        pos = self.paper_balance["positions"].get(code)
+        if not pos or pos["qty"] < qty:
+            return {
+                "order_no": None,
+                "status": "rejected",
+                "reason": "insufficient paper position",
+                "code": request.code,
+                "qty": request.quantity,
+            }
+
+        self.paper_balance["cash"] += qty * price
+        pos["qty"] -= qty
+        if pos["qty"] == 0:
+            del self.paper_balance["positions"][code]
+        print(f"[PAPER SELL] {code} {qty}주 @{price} 잔고 {self.paper_balance['cash']:,}")
+        return {"status": "filled"}
 
     def get_balance(self):
         if self.paper:

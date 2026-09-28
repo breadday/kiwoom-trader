@@ -124,6 +124,46 @@ class PerStockStrategyEngine:
 
         return actions
 
+    def run_single(self, code: str, market_data_provider=None):
+        """Evaluate and, when signalled, paper-execute one held stock."""
+        balances = self.manager.get_all_balances()
+        for pos in balances['all_positions']:
+            if pos['code'] != code:
+                continue
+
+            strategy_id = self.stock_strategies.get(code, "FACTOR")
+            strategy = STRATEGIES[strategy_id]
+            if market_data_provider:
+                market_data = market_data_provider(code)
+            else:
+                market_data = {
+                    "factor_total": 30 if pos['pl_pct'] < -30 else 60,
+                    "is_bounce": pos['pl_pct'] > -5,
+                    "change_pct": pos['pl_pct'],
+                }
+
+            should_sell, reason = strategy.should_sell(pos, market_data)
+            action = {
+                "code": code,
+                "account_id": pos['account_id'],
+                "account_name": pos['account_name'],
+                "broker": pos['broker'],
+                "strategy": strategy_id,
+                "should_sell": should_sell,
+                "reason": reason,
+                "qty": pos['qty'],
+                "cur": pos['cur'],
+            }
+            if should_sell:
+                action['executed'] = self.manager.sell_stock(pos['account_id'], code, pos['qty'])
+            return action
+
+        return {"error": f"{code} 보유종목 없음"}
+
+    def run_selected(self, codes: list[str], market_data_provider=None):
+        """Evaluate the requested stock codes in the given order."""
+        return [self.run_single(code, market_data_provider) for code in codes]
+
 if __name__ == "__main__":
     mgr = MultiAccountManager("/mnt/data/kiwoom_trader/accounts.yaml")
     engine = PerStockStrategyEngine(mgr)

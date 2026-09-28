@@ -8,6 +8,7 @@ from typing import Dict, List
 import yaml
 from .kiwoom_api import KiwoomAPI
 from .kiwoom_auth import KiwoomAuth
+from order import LiveOrderDisabledError
 
 class BrokerAdapter(ABC):
     def __init__(self, config: dict):
@@ -29,6 +30,12 @@ class BrokerAdapter(ABC):
     @abstractmethod
     def sell_market(self, code: str, qty: int) -> dict:
         pass
+
+    def _ensure_paper_order(self):
+        if not self.paper:
+            raise LiveOrderDisabledError(
+                f"{self.broker} live order submission is disabled"
+            )
 
 class KiwoomAdapter(BrokerAdapter):
     def __init__(self, config):
@@ -81,10 +88,12 @@ class NHAdapter(BrokerAdapter):
         return self.mock
 
     def buy_market(self, code, qty):
+        self._ensure_paper_order()
         print(f"[NH PAPER BUY] {code} {qty}주")
         return {"status": "filled", "broker": "nh"}
 
     def sell_market(self, code, qty):
+        self._ensure_paper_order()
         print(f"[NH PAPER SELL] {code} {qty}주")
         return {"status": "filled", "broker": "nh"}
 
@@ -104,9 +113,11 @@ class SamsungAdapter(BrokerAdapter):
         return self.mock if self.paper else self.mock
 
     def buy_market(self, code, qty):
+        self._ensure_paper_order()
         return {"status": "filled", "broker": "samsung"}
 
     def sell_market(self, code, qty):
+        self._ensure_paper_order()
         return {"status": "filled", "broker": "samsung"}
 
 class KBAdapter(BrokerAdapter):
@@ -125,9 +136,11 @@ class KBAdapter(BrokerAdapter):
         return self.mock if self.paper else self.mock
 
     def buy_market(self, code, qty):
+        self._ensure_paper_order()
         return {"status": "filled", "broker": "kb"}
 
     def sell_market(self, code, qty):
+        self._ensure_paper_order()
         return {"status": "filled", "broker": "kb"}
 
 class MultiAccountManager:
