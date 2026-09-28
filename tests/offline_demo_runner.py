@@ -27,6 +27,12 @@ except ImportError:
 import requests
 import urllib3.connectionpool
 
+# Import trusted numerical dependencies before process guards are installed.
+# pandas initializes platform metadata during import and may consult a native
+# platform command; that dependency bootstrap is not demo-code execution.
+import numpy
+import pandas
+
 
 NETWORK_ENTRYPOINTS = (
     "socket.getaddrinfo",
