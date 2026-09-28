@@ -17,13 +17,14 @@
 
 ## Verification
 
-- 43 focused order, strategy, daily-chart, and optimizer tests pass.
-- Full discovery passes all 68 tests with the approved Python 3.11 dependency target.
+- Full unittest discovery passes all 76 order, strategy, daily-chart, optimizer, and privacy tests when run with the repository-local `.tmp-pydeps` path.
+- The repository-local offline dependency path provides `pandas 3.0.6` and `numpy 2.4.6`; no package installation outside the repository was used.
 - The offline demo runner preloads trusted numerical dependencies before installing process/network guards, preventing pandas platform initialization from being misclassified as demo execution.
 - Fixture contract tests cover `ka10081`, `POST /api/dostk/chart`, continuation headers, normalized OHLCV rows, and fail-closed malformed responses.
 
 ## Remaining gates
 
-1. Run a read-only Kiwoom market-data smoke test only after explicit credential/network approval.
-2. Keep T8 deployment and live-account transition disabled until separately approved.
-3. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.
+1. Complete Gate 0: publish the rewritten refs with the guarded Windows bundle and verify all seven remote ref SHAs.
+2. Run a read-only Kiwoom market-data smoke test only after explicit credential/network approval.
+3. Keep T8 deployment and live-account transition disabled until separately approved.
+4. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.

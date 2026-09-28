@@ -238,6 +238,14 @@ class FactorBacktestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "same dates"):
             optimizer.simulate_factor_universe()
 
+    def test_factor_universe_rejects_short_provider_history_before_scoring(self):
+        data = {code: make_bars(index) for index, code in enumerate(UNIVERSE)}
+        data[UNIVERSE[-1]] = data[UNIVERSE[-1]][:-1]
+        optimizer = StrategyOptimizer(daily_chart_provider=lambda code, *, limit: data[code])
+
+        with self.assertRaisesRegex(ValueError, "expected exactly 312"):
+            optimizer.simulate_factor_universe()
+
     def test_optimize_factor_requires_a_code_in_approved_universe(self):
         with self.assertRaisesRegex(ValueError, "approved FACTOR universe"):
             StrategyOptimizer().optimize_factor("000001")

@@ -21,7 +21,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer 안전성 테스트 43개 통과.
+- 주문·전략·일봉·optimizer·privacy 안전성 테스트 76개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
-- 전체 테스트는 실행 환경에 `pandas`가 없어 3개 demo 테스트가 차단됨.
+- 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.

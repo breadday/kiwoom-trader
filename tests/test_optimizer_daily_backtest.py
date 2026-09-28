@@ -39,6 +39,9 @@ class DailyBacktestTests(unittest.TestCase):
         self.assertAlmostEqual(result.total_return, -15.0)
         self.assertEqual(result.total_trades, 1)
         self.assertEqual(result.win_rate, 0.0)
+        self.assertAlmostEqual(result.max_drawdown, 20.0)
+        self.assertAlmostEqual(result.avg_hold_days, 30.0)
+        self.assertLess(result.sharpe, 0.0)
 
     def test_partial_threshold_is_latched_after_rebound_and_recross(self):
         bars = bars_with_closes({1: 80, 2: 100, 3: 80, 59: 100})
@@ -103,6 +106,15 @@ class DailyBacktestTests(unittest.TestCase):
     def test_fails_closed_when_no_daily_chart_provider_is_configured(self):
         with self.assertRaisesRegex(RuntimeError, "daily chart provider"):
             StrategyOptimizer().simulate_trades("005930", "RESCUE", {}, days=60)
+
+    def test_propagates_read_only_provider_failure_without_mock_fallback(self):
+        def provider(code, *, limit):
+            raise RuntimeError("fixture unavailable")
+
+        with self.assertRaisesRegex(RuntimeError, "fixture unavailable"):
+            StrategyOptimizer(daily_chart_provider=provider).simulate_trades(
+                "005930", "RESCUE", {}, days=60
+            )
 
 
 if __name__ == "__main__":

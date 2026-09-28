@@ -1,5 +1,7 @@
+import json
 import unittest
 from datetime import datetime as real_datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 
 from api.kiwoom_api import KiwoomAPI
@@ -25,6 +27,8 @@ class FakeResponse:
 
 
 class KiwoomDailyChartTests(unittest.TestCase):
+    FIXTURE_PATH = Path(__file__).parent / "fixtures" / "ka10081_official_example.json"
+
     def make_api(self):
         api = KiwoomAPI(FakeAuth(), paper=True)
         api._throttle = lambda: None
@@ -190,6 +194,81 @@ class KiwoomDailyChartTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "valid YYYYMMDD"):
             self.make_api().get_daily_chart("005930", base_dt="00000000")
         post.assert_not_called()
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_normalizes_sanitized_official_example_fixture(self, post):
+        fixture = json.loads(self.FIXTURE_PATH.read_text(encoding="utf-8"))
+        self.assertTrue(fixture["_fixture_meta"]["sanitized"])
+        self.assertFalse(fixture["_fixture_meta"]["account_or_credential_data"])
+        post.return_value = FakeResponse(fixture["payload"])
+
+        result = self.make_api().get_daily_chart("005930", base_dt="20250908")
+
+        self.assertEqual([bar["date"] for bar in result], ["20250905", "20250908"])
+        self.assertEqual(result[-1]["close"], 70100)
+        self.assertEqual(result[-1]["volume"], 9263135)
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_rejects_continuation_without_next_key(self, post):
+        post.return_value = FakeResponse(
+            {"return_code": 0, "stk_dt_pole_chart_qry": []},
+            {"cont-yn": "Y"},
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "next-key"):
+            self.make_api().get_daily_chart("005930", limit=2)
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_rejects_repeated_continuation_key(self, post):
+        page = FakeResponse(
+            {"return_code": 0, "stk_dt_pole_chart_qry": []},
+            {"cont-yn": "Y", "next-key": "repeat"},
+        )
+        post.side_effect = [page, page]
+
+        with self.assertRaisesRegex(RuntimeError, "repeated"):
+            self.make_api().get_daily_chart("005930", limit=2)
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_rejects_max_pages_before_requested_limit(self, post):
+        post.return_value = FakeResponse(
+            {
+                "return_code": 0,
+                "stk_dt_pole_chart_qry": [{
+                    "dt": "20260925", "open_pric": "100", "high_pric": "110",
+                    "low_pric": "90", "cur_prc": "105", "trde_qty": "1000",
+                }],
+            },
+            {"cont-yn": "Y", "next-key": "page-2"},
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "max_pages"):
+            self.make_api().get_daily_chart("005930", limit=2, max_pages=1)
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_propagates_http_errors_before_json_normalization(self, post):
+        import requests
+
+        response = FakeResponse({})
+        response.raise_for_status = lambda: (_ for _ in ()).throw(requests.HTTPError("503"))
+        post.return_value = response
+
+        with self.assertRaisesRegex(requests.HTTPError, "503"):
+            self.make_api().get_daily_chart("005930")
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_accepts_commas_whitespace_and_zero_volume(self, post):
+        post.return_value = FakeResponse({"return_code": "0", "stk_dt_pole_chart_qry": [{
+            "dt": "20260925", "open_pric": " +1,000 ", "high_pric": "1,100",
+            "low_pric": "900", "cur_prc": "1,050", "trde_qty": "0",
+        }]})
+
+        result = self.make_api().get_daily_chart("005930")
+
+        self.assertEqual(result, [{
+            "date": "20260925", "open": 1000, "high": 1100,
+            "low": 900, "close": 1050, "volume": 0,
+        }])
 
 
 if __name__ == "__main__":
