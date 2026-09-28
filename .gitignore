@@ -8,3 +8,5 @@ __pycache__/
 *.pyc
 *.pyo
 automation/runs/
+.tmp-pydeps/
+.tmp-uv-cache/
