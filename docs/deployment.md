@@ -6,8 +6,10 @@
 제공한다. 실계좌 주문 제출은 지원 범위가 아니며, `paper=False` 주문은
 fail-closed여야 한다.
 
-현재 저장소에는 Vercel 애플리케이션 설정(`vercel.json`, `package.json`)이나
-credential 환경변수 로더가 없다. 따라서 이 문서는 배포 명령이 아니라,
+현재 저장소에는 Vercel 애플리케이션 설정(`vercel.json`, `package.json`)이
+없다. `KiwoomAPI`는 `KIWOOM_APP_KEY`, `KIWOOM_APP_SECRET`, 선택적
+`KIWOOM_BASE_URL` 환경변수에서 auth를 구성할 수 있지만, 이 값들은 실제
+endpoint 호출 승인 전까지 제공하지 않는다. 이 문서는 배포 명령이 아니라,
 배포를 승인하기 전에 충족해야 할 안전 조건을 정의한다.
 
 ## 배포 전 필수 검사
@@ -20,7 +22,9 @@ python -m compileall -q api tests
 git diff --check
 ```
 
-- 전체 테스트가 76개 `OK`가 아니면 배포하지 않는다.
+- 전체 unittest discovery가 `OK`가 아니면 배포하지 않는다. 현재 Python 3.11
+  runner와 CPython 3.14용 `.tmp-pydeps` native wheel이 불일치하므로,
+  dependency 환경을 먼저 복구한다.
 - `accounts.yaml`, `.env`, `config_live.py`, `*.key`, `token.json`을 commit하지 않는다.
 - API key, secret, token, account number를 로그·fixture·문서·채팅에 출력하지 않는다.
 - 합성 데모 결과를 실거래 성과나 매수 추천으로 표시하지 않는다.
@@ -41,9 +45,10 @@ git diff --check
 
 - secret은 Vercel/호스팅 제공자의 암호화된 secret store에만 저장한다.
 - 저장소 파일에 secret을 복사하거나 build artifact에 포함하지 않는다.
-- 현재 코드에는 환경변수에서 `KiwoomAuth`를 생성하는 표준 entrypoint가
-  없으므로, 이를 추가하기 전에는 credential을 연결한 배포를 진행하지
-  않는다.
+- 환경변수는 `KiwoomAPI` 생성 시 `KiwoomAuth` 구성에만 사용하며, 값은
+  출력·저장하지 않는다.
+- 실제 endpoint 호출을 연결한 배포는 read-only 승인과 secret 운영 검토
+  전까지 진행하지 않는다.
 - secret 노출이 의심되면 즉시 사용 중지·회전하고 로그와 build artifact를
   점검한다.
 

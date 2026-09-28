@@ -1,3 +1,4 @@
+import os
 import requests, time, random
 from datetime import datetime, timedelta, timezone
 from .kiwoom_auth import KiwoomAuth
@@ -5,7 +6,13 @@ from .daily import DailyChartCache
 from order import LiveOrderDisabledError, OrderRequest, OrderSide, OrderType
 
 class KiwoomAPI:
-    def __init__(self, auth: KiwoomAuth, paper=True):
+    def __init__(self, auth=None, paper=True):
+        if auth is None:
+            auth = KiwoomAuth(
+                os.getenv("KIWOOM_APP_KEY", ""),
+                os.getenv("KIWOOM_APP_SECRET", ""),
+                os.getenv("KIWOOM_BASE_URL", "https://api.kiwoom.com"),
+            )
         self.auth = auth
         self.paper = paper
         self.base_real = f"{auth.base_url}/api"
@@ -15,6 +22,11 @@ class KiwoomAPI:
         self._daily_cache = DailyChartCache()
         self.paper_balance = {"cash": 10000000, "positions": {}}
         print(f"[MODE] {'모의투자' if paper else '실전'} 모드")
+
+    @property
+    def is_paper(self):
+        """Expose the immutable-by-interface execution mode for smoke checks."""
+        return self.paper
 
     def _throttle(self):
         elapsed = time.time() - self.last_req

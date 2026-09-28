@@ -16,7 +16,17 @@ python -m compileall -q api tests
 git diff --check
 ```
 
-기대 결과: unittest 76개 `OK`, compileall exit 0, diff-check exit 0.
+기대 결과: 전체 unittest discovery가 `OK`, compileall exit 0, diff-check exit 0.
+
+현재 환경의 repository-local `.tmp-pydeps`에는 CPython 3.14용 NumPy/Pandas
+바이너리가 있어 Python 3.11 전체 discovery의 privacy import가 차단된다.
+따라서 의존성 복구 전까지는 아래 집중 검증 결과를 별도로 기록한다.
+
+```text
+python -m unittest tests.test_08e_smoke tests.test_kiwoom_daily_chart tests.test_optimizer_daily_backtest tests.test_optimizer_factor_backtest -q
+Ran 52 tests
+OK
+```
 
 ## 실제 smoke test 실행 조건
 
@@ -25,4 +35,4 @@ git diff --check
 출력하되 token·header·account field는 출력하거나 저장하지 않는다.
 
 현재 저장소에서는 안전한 credential 주입 경로와 승인된 Kiwoom 네트워크
-환경이 확인되지 않았으므로 실제 smoke test를 실행하지 않는다.
+환경이 확인되지 않았으므로 실제 endpoint smoke test를 실행하지 않는다.

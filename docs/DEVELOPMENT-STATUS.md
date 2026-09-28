@@ -17,8 +17,8 @@
 
 ## Verification
 
-- Full unittest discovery passes all 76 order, strategy, daily-chart, optimizer, and privacy tests when run with the repository-local `.tmp-pydeps` path.
-- The repository-local offline dependency path provides `pandas 3.0.6` and `numpy 2.4.6`; no package installation outside the repository was used.
+- STEP 08E offline smoke and focused daily-chart/optimizer regression pass 52 tests.
+- Full discovery is currently blocked by CPython 3.14 NumPy/Pandas binaries in repository-local `.tmp-pydeps` while the runner is Python 3.11; no external package installation was performed.
 - The offline demo runner preloads trusted numerical dependencies before installing process/network guards, preventing pandas platform initialization from being misclassified as demo execution.
 - Fixture contract tests cover `ka10081`, `POST /api/dostk/chart`, continuation headers, normalized OHLCV rows, and fail-closed malformed responses.
 
