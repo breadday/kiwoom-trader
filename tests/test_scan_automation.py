@@ -121,6 +121,36 @@ class ReadOnlyMarketScannerTests(unittest.TestCase):
 
         self.assertEqual(evaluated, [])
 
+    def test_nonfinite_ohlcv_never_reaches_evaluator(self):
+        evaluated = []
+
+        def evaluator(code, bars):
+            evaluated.append((code, bars))
+            return True, "unsafe"
+
+        base_bar = {
+            "date": "20260925",
+            "open": 100,
+            "high": 110,
+            "low": 90,
+            "close": 105,
+            "volume": 1000,
+        }
+        for field, value in (("close", float("nan")), ("volume", float("inf"))):
+            with self.subTest(field=field, value=value):
+                bar = dict(base_bar)
+                bar[field] = value
+                scanner = ReadOnlyMarketScanner(
+                    ScanConfig(codes=("005930",)),
+                    daily_chart_provider=lambda *_args, **_kwargs: [bar],
+                    evaluator=evaluator,
+                )
+                result = scanner.scan_once()[0]
+                self.assertEqual(result.status, "ERROR")
+                self.assertFalse(result.matched)
+
+        self.assertEqual(evaluated, [])
+
 
 class ScanRunnerTests(unittest.TestCase):
     def test_runner_publishes_bounded_cycles_without_order_execution(self):

@@ -13,6 +13,7 @@
 - `api/multi_broker_api.py`: non-paper order blocking for NH, Samsung, and KB adapters.
 - `api/strategy_engine.py`: `run_single` and `run_selected` execution paths.
 - `api/daily.py`: bounded TTL/LRU daily-chart cache connected to `KiwoomAPI`.
+- `api/request_throttle.py`: monotonic, thread-safe 0.21-second minimum interval for outbound broker requests.
 - `api/strategy_optimizer.py`: daily-bar provider injection for RESCUE and FACTOR backtests.
 - `api/index.py`: Vercel Python handler with environment-injected credentials and hard-coded paper mode.
 - `api/scanner.py`: explicit-universe read-only scanner and bounded/stoppable result runner with no order dependency.
@@ -22,9 +23,11 @@
 
 ## Verification
 
-- Full discovery passes 111 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
+- Full discovery passes 117 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
 - The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
 - Scan automation isolates provider/evaluator failures per symbol, validates daily bars before evaluation, and publishes result batches only through an injected sink.
+- Request-throttle tests verify immediate first use, minimum-interval waits, backward-clock safety, invalid configuration rejection, concurrent-call serialization, and throttling before live balance network access.
+- Scanner validation rejects non-finite OHLCV values before evaluator execution.
 - Telegram notification tests verify actionable-only delivery, no-network behavior for NO_MATCH batches, credential fail-closed behavior, secret-safe errors, the 4,000-character message boundary, duplicate suppression across process restarts, persisted reset after NO_MATCH, corrupt-state rejection, and retry after failed delivery.
 - Scan entrypoint tests verify environment parsing, explicit evaluator injection, hard-coded paper mode, pre-request rejection of unsafe APIs, and exactly one published cycle.
 - Scheduling tests verify bounded retries for `TelegramDeliveryError` only, immediate propagation of non-retryable failures, lock conflict rejection before API construction, accurate lock-path I/O failures, and automatic lock reuse after release.

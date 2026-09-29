@@ -73,6 +73,19 @@ class KiwoomOrderSafetyTests(unittest.TestCase):
         self.assertEqual(api.paper_balance["cash"], starting_cash - 800)
         self.assertEqual(api.paper_balance["positions"]["005930"]["qty"], 1)
 
+    @patch("api.kiwoom_api.requests.get")
+    def test_live_balance_read_is_throttled_before_network(self, get):
+        api = self.make_api(paper=False)
+        events = []
+        api._throttle = lambda: events.append("throttle")
+        response = get.return_value
+        response.json.side_effect = lambda: events.append("network") or {"cash": 0}
+
+        result = api.get_balance()
+
+        self.assertEqual(result, {"cash": 0})
+        self.assertEqual(events, ["throttle", "network"])
+
 
 if __name__ == "__main__":
     unittest.main()

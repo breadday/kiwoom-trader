@@ -8,6 +8,7 @@ to a dashboard or notification adapter.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+import math
 from threading import Event
 from typing import Any
 
@@ -144,6 +145,7 @@ class ReadOnlyMarketScanner:
             if any(
                 isinstance(value, bool)
                 or not isinstance(value, (int, float))
+                or not math.isfinite(value)
                 or value <= 0
                 for value in prices
             ):
@@ -154,6 +156,7 @@ class ReadOnlyMarketScanner:
             if (
                 isinstance(volume, bool)
                 or not isinstance(volume, (int, float))
+                or not math.isfinite(volume)
                 or volume < 0
             ):
                 raise ValueError("daily volume must be a non-negative number")

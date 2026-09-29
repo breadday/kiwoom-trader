@@ -7,6 +7,8 @@
 - [x] 텔레그램 알림 (MATCH/ERROR 전용 result sink, 환경변수 자격증명)
 - [x] 스캔 실행 엔트리포인트 (환경변수 설정, paper 고정, 기본 1회 실행)
 - [x] 로컬 스케줄 안전장치 (동시 실행 잠금, 제한적 Telegram 재시도)
+- [x] Kiwoom 요청 throttle (단조시계, 동시 호출 직렬화, 최소 0.21초)
+- [x] 스캔 OHLCV 유한수 검증 (NaN/Infinity fail-closed)
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -21,9 +23,18 @@
 - `api.clear_daily_cache()`로 인스턴스 전체 캐시 삭제.
 - 기본값 및 명시적 당일 조회 모두 TTL 적용: 최신 값이 즉시 필요하면 `refresh=True` 사용.
 
+## Kiwoom 요청 제한
+
+- `api/request_throttle.py`의 `RequestThrottle`은 `time.monotonic()`과 프로세스
+  내부 잠금을 사용해 동시 호출을 직렬화하고 요청 시작 간 최소 0.21초를 보장한다.
+- 일봉 페이지 조회, 분봉 조회, paper 주문 처리 및 live 잔고 조회가 같은 API
+  인스턴스 throttle을 사용한다. live 주문은 기존과 같이 네트워크 전에 차단된다.
+- 스캐너는 evaluator 호출 전에 모든 OHLC 가격과 거래량이 유한수인지 확인하며
+  `NaN`/`Infinity`를 종목별 `ERROR`로 격리한다.
+
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 111개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 117개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.

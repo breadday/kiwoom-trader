@@ -3,6 +3,7 @@ import requests, time, random
 from datetime import datetime, timedelta, timezone
 from .kiwoom_auth import KiwoomAuth
 from .daily import DailyChartCache
+from .request_throttle import RequestThrottle
 from order import LiveOrderDisabledError, OrderRequest, OrderSide, OrderType
 
 class KiwoomAPI:
@@ -34,7 +35,7 @@ class KiwoomAPI:
         self.base_real = f"{auth.base_url}/api"
         self.base_paper = f"{auth.base_url}/api/mock" # 키움 모의투자 prefix (가정, 실제로는 동일 URL에 계좌구분)
         self.base = self.base_paper if paper else self.base_real
-        self.last_req = 0
+        self._request_throttle = RequestThrottle(0.21)
         self._daily_cache = DailyChartCache()
         self.paper_balance = {"cash": 10000000, "positions": {}}
         print(f"[MODE] {'모의투자' if paper else '실전'} 모드")
@@ -45,10 +46,7 @@ class KiwoomAPI:
         return self.paper
 
     def _throttle(self):
-        elapsed = time.time() - self.last_req
-        if elapsed < 0.21:
-            time.sleep(0.21 - elapsed)
-        self.last_req = time.time()
+        self._request_throttle.wait()
 
     def get_minute_chart(self, code, tick=1):
         self._throttle()
@@ -246,5 +244,6 @@ class KiwoomAPI:
     def get_balance(self):
         if self.paper:
             return self.paper_balance
+        self._throttle()
         url = f"{self.base}/v1/account/balance"
         return requests.get(url, headers=self.auth.headers()).json()
