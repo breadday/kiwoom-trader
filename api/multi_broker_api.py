@@ -5,6 +5,7 @@
 """
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+import math
 from typing import Dict, List
 import yaml
 from .kiwoom_api import KiwoomAPI
@@ -205,9 +206,9 @@ class MultiAccountManager:
         all_pos = []
 
         for acc_id, adapter in self.adapters.items():
-            bal = adapter.get_balance()
-            cash = bal.get('cash', 0)
-            positions = bal.get('positions', {})
+            bal = self._validate_balance(adapter.get_balance())
+            cash = bal['cash']
+            positions = bal['positions']
 
             acc_eval = 0
             acc_buy = 0
@@ -257,6 +258,48 @@ class MultiAccountManager:
             },
             "all_positions": all_pos
         }
+
+    @staticmethod
+    def _validate_balance(balance):
+        if not isinstance(balance, Mapping):
+            raise ValueError("balance must be a mapping")
+        cash = balance.get('cash')
+        positions = balance.get('positions')
+        if (
+            isinstance(cash, bool)
+            or not isinstance(cash, (int, float))
+            or not math.isfinite(cash)
+            or cash < 0
+        ):
+            raise ValueError("balance cash must be a non-negative finite number")
+        if not isinstance(positions, Mapping):
+            raise ValueError("balance positions must be a mapping")
+
+        normalized_positions = {}
+        for code, position in positions.items():
+            if not isinstance(code, str) or len(code) != 6 or not code.isdigit():
+                raise ValueError("balance position code must be a six-digit string")
+            if not isinstance(position, Mapping):
+                raise ValueError("balance position must be a mapping")
+            qty = position.get('qty')
+            avg = position.get('avg')
+            current = position.get('cur')
+            if isinstance(qty, bool) or not isinstance(qty, int) or qty <= 0:
+                raise ValueError("balance position quantity must be a positive integer")
+            if any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value <= 0
+                for value in (avg, current)
+            ):
+                raise ValueError("balance position prices must be positive finite numbers")
+            normalized_positions[code] = {
+                "qty": qty,
+                "avg": avg,
+                "cur": current,
+            }
+        return {"cash": cash, "positions": normalized_positions}
 
     def sell_stock(self, account_id: str, code: str, qty: int):
         if account_id not in self.adapters:

@@ -35,7 +35,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 124개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 126개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -113,3 +113,8 @@
   않는다. `accounts:` 목록을 명시해야 하며 중복 ID, 미지원 broker, 잘못된 문서
   구조와 boolean이 아닌 `paper` 설정은 adapter 생성 전에 거부한다.
 - paper adapter의 mock 잔고는 명시적으로 `paper: true`인 경우에만 사용할 수 있다.
+- 통합 전 각 balance의 현금, 6자리 종목코드, 양의 정수 수량, 유한한 양수
+  평균가·현재가를 검증한다. 음수·boolean·`NaN`·`Infinity`·잘못된 구조는
+  총계 계산 전에 실패한다.
+- 같은 종목이 여러 계좌에 있어도 계좌별 포지션을 유지하며 임의로 평균단가나
+  수량을 합쳐 하나의 포지션으로 만들지 않는다.

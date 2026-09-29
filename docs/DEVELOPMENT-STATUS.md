@@ -23,12 +23,13 @@
 
 ## Verification
 
-- Full discovery passes 124 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
+- Full discovery passes 126 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
 - The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
 - Scan automation isolates provider/evaluator failures per symbol, validates daily bars before evaluation, and publishes result batches only through an injected sink.
 - Request-throttle tests verify immediate first use, minimum-interval waits, backward-clock safety, invalid configuration rejection, concurrent-call serialization, and throttling before live balance network access.
 - Scanner validation rejects non-finite OHLCV values before evaluator execution.
 - Multi-account tests verify explicit paper configuration, missing/malformed/duplicate/unsupported account rejection, live-balance blocking, and absence of network or mock fallback in non-paper mode.
+- Balance aggregation validates finite non-negative cash, six-digit codes, positive integer quantities, and finite positive prices while preserving account-specific positions for duplicate stock codes.
 - Telegram notification tests verify actionable-only delivery, no-network behavior for NO_MATCH batches, credential fail-closed behavior, secret-safe errors, the 4,000-character message boundary, duplicate suppression across process restarts, persisted reset after NO_MATCH, corrupt-state rejection, and retry after failed delivery.
 - Scan entrypoint tests verify environment parsing, explicit evaluator injection, hard-coded paper mode, pre-request rejection of unsafe APIs, and exactly one published cycle.
 - Scheduling tests verify bounded retries for `TelegramDeliveryError` only, immediate propagation of non-retryable failures, lock conflict rejection before API construction, accurate lock-path I/O failures, and automatic lock reuse after release.
