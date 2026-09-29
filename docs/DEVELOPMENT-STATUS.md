@@ -23,6 +23,7 @@
 - `api/index.py`: Vercel Python handler with environment-injected credentials and hard-coded paper mode.
 - `api/scanner.py`: explicit-universe read-only scanner and bounded/stoppable result runner with no order dependency.
 - `api/telegram_notifications.py`: environment-configured Telegram result sink for bounded MATCH/ERROR scan alerts, with secret-safe failures, in-process duplicate suppression, and optional atomic JSON state persistence.
+- Durable Telegram alert state reloads under a companion OS lock and serializes duplicate checks, delivery, and persistence across local processes.
 - `api/scan_entrypoint.py`: environment-validated, paper-only composition entrypoint for one read-only scan-and-notify cycle with an explicitly injected evaluator.
 - `api/scan_scheduling.py`: bounded Telegram-only retry wrapper and non-blocking OS file lock for single-host scheduled scans.
 
@@ -42,6 +43,7 @@
 - Durable partial-exit tests verify restart suppression, pending-before-order persistence, explicit failed-order release, uncertain-result retention, corrupt-state rejection, pre-order write failure, and explicit campaign reset.
 - State-concurrency tests verify stale-store reload before reservation and fail-closed lock contention before provider access or paper sells.
 - Telegram notification tests verify actionable-only delivery, no-network behavior for NO_MATCH batches, credential fail-closed behavior, secret-safe errors, the 4,000-character message boundary, duplicate suppression across process restarts, persisted reset after NO_MATCH, corrupt-state rejection, and retry after failed delivery.
+- Telegram state-concurrency tests verify stale-sink reload before delivery and fail-closed lock contention before network access.
 - Scan entrypoint tests verify environment parsing, explicit evaluator injection, hard-coded paper mode, pre-request rejection of unsafe APIs, and exactly one published cycle.
 - Scheduling tests verify bounded retries for `TelegramDeliveryError` only, immediate propagation of non-retryable failures, lock conflict rejection before API construction, accurate lock-path I/O failures, and automatic lock reuse after release.
 - The offline demo runner preloads trusted numerical dependencies before installing process/network guards, preventing pandas platform initialization from being misclassified as demo execution.
@@ -55,6 +57,6 @@
 4. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.
 5. Live Telegram delivery remains gated on approved network access and operator-provided `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`; tests use an injected offline transport.
 6. A production scan evaluator remains gated on an explicitly approved, data-validated signal rule; the entrypoint intentionally has no invented default strategy.
-7. Local single-scheduler runs can persist duplicate-alert state with `KIWOOM_ALERT_STATE_FILE`; serverless/multi-instance deployment still requires an external durable store with concurrency control.
+7. Local processes can serialize duplicate-alert state with `KIWOOM_ALERT_STATE_FILE`; serverless/multi-instance deployment still requires an external durable store with concurrency control.
 8. `KIWOOM_SCAN_LOCK_FILE` prevents overlapping runs on one host only; multi-instance deployment requires a distributed lock.
 9. The optional partial-exit state file supports same-host multi-process serialization and remains intentionally conservative: new campaigns require explicit reset. Multi-host execution requires a distributed store/lock, and automatic campaign rollover requires a broker-supplied stable position identity.

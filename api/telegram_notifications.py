@@ -1,6 +1,7 @@
 """Telegram result sink for read-only market scan alerts."""
 
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import json
 import os
@@ -10,6 +11,7 @@ import tempfile
 from typing import Any
 
 from api.scanner import ScanItem
+from api.scan_scheduling import FileRunLock, ScanAlreadyRunningError
 
 
 _BOT_TOKEN_PATTERN = re.compile(r"^[0-9]+:[A-Za-z0-9_-]+$")
@@ -24,6 +26,10 @@ class TelegramDeliveryError(RuntimeError):
     Messages intentionally omit the request URL and response body because both
     can contain credentials or provider-controlled content.
     """
+
+
+class TelegramStateBusyError(RuntimeError):
+    """Raised when another process is updating durable alert state."""
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,10 @@ class TelegramScanResultSink:
 
     def __call__(self, batch):
         items = self._validate_batch(batch)
+        with self._locked_state():
+            return self._send_and_record(items)
+
+    def _send_and_record(self, items):
         passive_state_changed = False
         for item in items:
             if item.status == "NO_MATCH":
@@ -143,6 +153,27 @@ class TelegramScanResultSink:
             self._last_states[item.code] = self._state_fingerprint(item)
         self._persist_states()
         return True
+
+    @contextmanager
+    def _locked_state(self):
+        state_file = self.config.alert_state_file
+        if state_file is None:
+            yield
+            return
+        lock = FileRunLock(f"{state_file}.lock")
+        try:
+            lock.acquire()
+        except ScanAlreadyRunningError:
+            raise TelegramStateBusyError(
+                "alert state is being updated by another process"
+            ) from None
+        except RuntimeError:
+            raise RuntimeError("alert state lock file could not be opened") from None
+        try:
+            self._last_states = self._load_states(state_file)
+            yield
+        finally:
+            lock.release()
 
     @staticmethod
     def _state_fingerprint(item):

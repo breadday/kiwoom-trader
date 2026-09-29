@@ -2,11 +2,13 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from api.scan_scheduling import FileRunLock
 from api.scanner import ScanItem
 from api.telegram_notifications import (
     TelegramConfig,
     TelegramDeliveryError,
     TelegramScanResultSink,
+    TelegramStateBusyError,
 )
 
 
@@ -241,6 +243,51 @@ class TelegramScanResultSinkTests(unittest.TestCase):
             self.assertTrue(TelegramScanResultSink(config, transport=transport)(batch))
             self.assertFalse(TelegramScanResultSink(config, transport=transport)(batch))
             self.assertEqual(len(calls), 1)
+
+    def test_stale_sink_reloads_state_before_sending_duplicate(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "alert-state.json")
+            config = TelegramConfig(
+                bot_token="123456:TEST_token",
+                chat_id="123",
+                alert_state_file=state_file,
+            )
+            calls = []
+
+            def transport(_url, **kwargs):
+                calls.append(kwargs["json"]["text"])
+                return FakeResponse()
+
+            first = TelegramScanResultSink(config, transport=transport)
+            stale = TelegramScanResultSink(config, transport=transport)
+            batch = [
+                ScanItem(
+                    "005930", "MATCH", True, "breakout", "20260929", 72000, 1000
+                )
+            ]
+
+            self.assertTrue(first(batch))
+            self.assertFalse(stale(batch))
+            self.assertEqual(len(calls), 1)
+
+    def test_state_lock_contention_fails_before_network(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "alert-state.json")
+            calls = []
+            sink = TelegramScanResultSink(
+                TelegramConfig(
+                    bot_token="123456:TEST_token",
+                    chat_id="123",
+                    alert_state_file=state_file,
+                ),
+                transport=lambda *args, **kwargs: calls.append((args, kwargs)),
+            )
+
+            with FileRunLock(f"{state_file}.lock"):
+                with self.assertRaises(TelegramStateBusyError):
+                    sink([ScanItem("005930", "MATCH", True, "breakout")])
+
+            self.assertEqual(calls, [])
 
     def test_persisted_no_match_allows_later_match_after_restart(self):
         with TemporaryDirectory() as directory:
