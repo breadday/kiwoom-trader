@@ -22,7 +22,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 97개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 100개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -47,6 +47,12 @@
   누락되거나 형식이 잘못되면 네트워크 호출 전에 실패한다.
 - `MATCH`와 `ERROR`만 한 번의 plain-text batch 알림으로 전송한다.
   `NO_MATCH`만 있는 주기는 전송하지 않아 반복 알림을 제한한다.
+- 같은 sink 프로세스 안에서는 종목별 상태·사유·최신 일자·종가·거래량이 모두
+  같은 `MATCH`/`ERROR`를 재전송하지 않는다. `NO_MATCH` 전환 후 다시 발생하거나
+  fingerprint가 달라지면 새 알림으로 전송한다.
+- Telegram 전송이 실패한 결과는 전송 완료 상태로 기록하지 않아 다음 주기에
+  다시 시도한다. 현재 중복 상태는 메모리에만 유지되므로 프로세스 재시작을 넘는
+  영속 중복 방지는 별도 상태 저장소가 필요하다.
 - Telegram 응답 실패와 전송 예외는 토큰, 요청 URL, 응답 본문을 노출하지 않는
   `TelegramDeliveryError`로 변환한다.
 - 메시지는 4,000자로 제한하며 초과 항목 수를 표시한다.

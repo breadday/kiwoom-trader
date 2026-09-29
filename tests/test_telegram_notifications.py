@@ -129,6 +129,79 @@ class TelegramScanResultSinkTests(unittest.TestCase):
         self.assertLessEqual(len(messages[0]), 4000)
         self.assertIn("more omitted", messages[0])
 
+    def test_identical_actionable_result_is_sent_only_once(self):
+        messages = []
+
+        def transport(_url, **kwargs):
+            messages.append(kwargs["json"]["text"])
+            return FakeResponse()
+
+        sink = TelegramScanResultSink(
+            TelegramConfig(bot_token="123456:TEST_token", chat_id="123"),
+            transport=transport,
+        )
+        batch = [
+            ScanItem("005930", "MATCH", True, "breakout", "20260929", 72000, 1000)
+        ]
+
+        self.assertTrue(sink(batch))
+        self.assertFalse(sink(batch))
+        self.assertEqual(len(messages), 1)
+
+    def test_no_match_reset_allows_a_later_match_alert(self):
+        messages = []
+
+        def transport(_url, **kwargs):
+            messages.append(kwargs["json"]["text"])
+            return FakeResponse()
+
+        sink = TelegramScanResultSink(
+            TelegramConfig(bot_token="123456:TEST_token", chat_id="123"),
+            transport=transport,
+        )
+        match = ScanItem(
+            "005930", "MATCH", True, "breakout", "20260929", 72000, 1000
+        )
+
+        self.assertTrue(sink([match]))
+        self.assertFalse(
+            sink(
+                [
+                    ScanItem(
+                        "005930",
+                        "NO_MATCH",
+                        False,
+                        "signal cleared",
+                        "20260930",
+                        71000,
+                        900,
+                    )
+                ]
+            )
+        )
+        self.assertTrue(sink([match]))
+        self.assertEqual(len(messages), 2)
+
+    def test_failed_delivery_is_retried_on_the_next_call(self):
+        attempts = []
+
+        def transport(_url, **kwargs):
+            attempts.append(kwargs["json"]["text"])
+            if len(attempts) == 1:
+                return FakeResponse(status_code=503, payload={"ok": False})
+            return FakeResponse()
+
+        sink = TelegramScanResultSink(
+            TelegramConfig(bot_token="123456:TEST_token", chat_id="123"),
+            transport=transport,
+        )
+        batch = [ScanItem("005930", "ERROR", False, "provider unavailable")]
+
+        with self.assertRaises(TelegramDeliveryError):
+            sink(batch)
+        self.assertTrue(sink(batch))
+        self.assertEqual(len(attempts), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -80,10 +80,19 @@ class TelegramScanResultSink:
             raise TypeError("transport must be callable")
         self.config = config
         self._transport = _default_transport if transport is None else transport
+        self._last_states = {}
 
     def __call__(self, batch):
         items = self._validate_batch(batch)
-        actionable = [item for item in items if item.status in {"MATCH", "ERROR"}]
+        for item in items:
+            if item.status == "NO_MATCH":
+                self._last_states[item.code] = self._state_fingerprint(item)
+        actionable = [
+            item
+            for item in items
+            if item.status in {"MATCH", "ERROR"}
+            and self._last_states.get(item.code) != self._state_fingerprint(item)
+        ]
         if not actionable:
             return False
 
@@ -109,7 +118,19 @@ class TelegramScanResultSink:
             raise TelegramDeliveryError("Telegram returned an invalid response") from None
         if not isinstance(payload, Mapping) or payload.get("ok") is not True:
             raise TelegramDeliveryError("Telegram rejected the alert")
+        for item in actionable:
+            self._last_states[item.code] = self._state_fingerprint(item)
         return True
+
+    @staticmethod
+    def _state_fingerprint(item):
+        return (
+            item.status,
+            item.reason,
+            item.latest_date,
+            item.latest_close,
+            item.latest_volume,
+        )
 
     @staticmethod
     def _validate_batch(batch):
