@@ -13,6 +13,7 @@
 - `api/multi_broker_api.py`: non-paper order and live-balance blocking for all adapters, plus fail-closed explicit account configuration.
 - `api/strategy_engine.py`: `run_single` and `run_selected` execution paths.
 - Strategy execution requires an explicit per-stock strategy and caller-supplied market-data mapping; synthetic signal fallback is disabled.
+- Stock-only execution rejects positions held in multiple accounts; `run_account_position` requires an explicit account and stock pair.
 - `api/daily.py`: bounded TTL/LRU daily-chart cache connected to `KiwoomAPI`.
 - `api/request_throttle.py`: monotonic, thread-safe 0.21-second minimum interval for outbound broker requests.
 - `api/strategy_optimizer.py`: daily-bar provider injection for RESCUE and FACTOR backtests.
@@ -24,7 +25,7 @@
 
 ## Verification
 
-- Full discovery passes 133 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
+- Full discovery passes 136 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
 - The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
 - Scan automation isolates provider/evaluator failures per symbol, validates daily bars before evaluation, and publishes result batches only through an injected sink.
 - Request-throttle tests verify immediate first use, minimum-interval waits, backward-clock safety, invalid configuration rejection, concurrent-call serialization, and throttling before live balance network access.
@@ -33,6 +34,7 @@
 - Balance aggregation validates finite non-negative cash, six-digit codes, positive integer quantities, and finite positive prices while preserving account-specific positions for duplicate stock codes.
 - Strategy-engine tests verify missing provider, missing strategy, and malformed market-data results fail before any paper sell call.
 - Multi-symbol strategy execution preflights every evaluation before paper actions, preserves selected order, and rejects duplicate selected codes before provider access.
+- Strategy-engine account-selection tests verify that stock-only execution rejects multi-account ambiguity before provider access or paper sells, while explicit account-and-stock execution targets only the requested account.
 - Telegram notification tests verify actionable-only delivery, no-network behavior for NO_MATCH batches, credential fail-closed behavior, secret-safe errors, the 4,000-character message boundary, duplicate suppression across process restarts, persisted reset after NO_MATCH, corrupt-state rejection, and retry after failed delivery.
 - Scan entrypoint tests verify environment parsing, explicit evaluator injection, hard-coded paper mode, pre-request rejection of unsafe APIs, and exactly one published cycle.
 - Scheduling tests verify bounded retries for `TelegramDeliveryError` only, immediate propagation of non-retryable failures, lock conflict rejection before API construction, accurate lock-path I/O failures, and automatic lock reuse after release.

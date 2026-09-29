@@ -14,6 +14,10 @@ class MarketDataRequiredError(RuntimeError):
 class StrategyNotConfiguredError(RuntimeError):
     """Raised when a held stock has no explicitly selected strategy."""
 
+
+class AmbiguousPositionError(RuntimeError):
+    """Raised when a stock-only request matches more than one account."""
+
 class Strategy:
     def should_sell(self, pos: dict, market_data: dict) -> tuple[bool, str]:
         """return (sell?, reason)"""
@@ -169,14 +173,47 @@ class PerStockStrategyEngine:
         market_data_provider = self._require_market_data_provider(
             market_data_provider
         )
-        balances = self.manager.get_all_balances()
-        for pos in balances['all_positions']:
-            if pos['code'] != code:
-                continue
-            action = self._evaluate_position(pos, market_data_provider)
-            return self._execute_action(action)
+        positions = [
+            pos
+            for pos in self.manager.get_all_balances()['all_positions']
+            if pos['code'] == code
+        ]
+        if len(positions) > 1:
+            raise AmbiguousPositionError(
+                f"{code} is held in multiple accounts; account_id is required"
+            )
+        if not positions:
+            return {"error": f"{code} 보유종목 없음"}
+        action = self._evaluate_position(positions[0], market_data_provider)
+        return self._execute_action(action)
 
-        return {"error": f"{code} 보유종목 없음"}
+    def run_account_position(
+        self,
+        account_id: str,
+        code: str,
+        market_data_provider=None,
+    ):
+        """Evaluate and execute one explicitly identified account position."""
+        market_data_provider = self._require_market_data_provider(
+            market_data_provider
+        )
+        if not isinstance(account_id, str) or not account_id.strip():
+            raise ValueError("account_id must be a non-empty string")
+        if not isinstance(code, str) or len(code) != 6 or not code.isdigit():
+            raise ValueError("code must be a six-digit string")
+        positions = [
+            pos
+            for pos in self.manager.get_all_balances()['all_positions']
+            if pos['account_id'] == account_id and pos['code'] == code
+        ]
+        if len(positions) > 1:
+            raise AmbiguousPositionError(
+                f"duplicate position for account {account_id} and code {code}"
+            )
+        if not positions:
+            return {"error": f"{account_id}/{code} 보유종목 없음"}
+        action = self._evaluate_position(positions[0], market_data_provider)
+        return self._execute_action(action)
 
     def run_selected(self, codes: list[str], market_data_provider=None):
         """Evaluate the requested stock codes in the given order."""
@@ -192,18 +229,26 @@ class PerStockStrategyEngine:
             raise ValueError("selected codes must be unique")
 
         positions = self.manager.get_all_balances()['all_positions']
-        first_position_by_code = {}
+        positions_by_code = {}
         for pos in positions:
-            first_position_by_code.setdefault(pos['code'], pos)
+            positions_by_code.setdefault(pos['code'], []).append(pos)
+
+        ambiguous = [
+            code for code in codes if len(positions_by_code.get(code, ())) > 1
+        ]
+        if ambiguous:
+            raise AmbiguousPositionError(
+                "selected code is held in multiple accounts; account_id is required"
+            )
 
         actions = []
         for code in codes:
-            pos = first_position_by_code.get(code)
-            if pos is None:
+            matches = positions_by_code.get(code, ())
+            if not matches:
                 actions.append({"error": f"{code} 보유종목 없음"})
             else:
                 actions.append(
-                    self._evaluate_position(pos, market_data_provider)
+                    self._evaluate_position(matches[0], market_data_provider)
                 )
         return [self._execute_action(action) for action in actions]
 

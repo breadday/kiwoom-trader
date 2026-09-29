@@ -1,6 +1,7 @@
 import unittest
 
 from api.strategy_engine import (
+    AmbiguousPositionError,
     MarketDataRequiredError,
     PerStockStrategyEngine,
     StrategyNotConfiguredError,
@@ -20,11 +21,11 @@ class FakeManager:
         return {"status": "filled", "simulated": True}
 
 
-def position(code, pl_pct):
+def position(code, pl_pct, account_id="paper-1"):
     return {
         "code": code,
-        "account_id": "paper-1",
-        "account_name": "Paper account",
+        "account_id": account_id,
+        "account_name": f"Paper account {account_id}",
         "broker": "kiwoom",
         "pl_pct": pl_pct,
         "qty": 2,
@@ -160,6 +161,65 @@ class StrategyEngineSelectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unique"):
             engine.run_selected(
                 ["005930", "005930"],
+                lambda code: provider_calls.append(code) or {},
+            )
+
+        self.assertEqual(provider_calls, [])
+        self.assertEqual(manager.sell_calls, [])
+
+    def test_run_single_rejects_same_code_held_in_multiple_accounts(self):
+        manager = FakeManager(
+            [
+                position("005930", -45, "paper-1"),
+                position("005930", -45, "paper-2"),
+            ]
+        )
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+        provider_calls = []
+
+        with self.assertRaises(AmbiguousPositionError):
+            engine.run_single(
+                "005930",
+                lambda code: provider_calls.append(code) or {},
+            )
+
+        self.assertEqual(provider_calls, [])
+        self.assertEqual(manager.sell_calls, [])
+
+    def test_run_account_position_targets_only_the_explicit_account(self):
+        manager = FakeManager(
+            [
+                position("005930", -45, "paper-1"),
+                position("005930", -45, "paper-2"),
+            ]
+        )
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+
+        result = engine.run_account_position(
+            "paper-2",
+            "005930",
+            lambda _code: {},
+        )
+
+        self.assertEqual(result["account_id"], "paper-2")
+        self.assertEqual(manager.sell_calls, [("paper-2", "005930", 2)])
+
+    def test_run_selected_rejects_ambiguous_holding_before_evaluation(self):
+        manager = FakeManager(
+            [
+                position("005930", -45, "paper-1"),
+                position("005930", -45, "paper-2"),
+            ]
+        )
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+        provider_calls = []
+
+        with self.assertRaises(AmbiguousPositionError):
+            engine.run_selected(
+                ["005930"],
                 lambda code: provider_calls.append(code) or {},
             )
 
