@@ -418,7 +418,7 @@ class StrategyEngineSelectionTests(unittest.TestCase):
             )
             engine.set_strategy("005930", "RESCUE")
 
-            with self.assertRaisesRegex(RuntimeError, "could not be written"):
+            with self.assertRaisesRegex(RuntimeError, "partial-exit state"):
                 engine.run_single("005930", lambda _code: {})
 
             self.assertEqual(manager.sell_calls, [])

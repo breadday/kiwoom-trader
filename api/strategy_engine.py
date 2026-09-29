@@ -129,6 +129,8 @@ class PerStockStrategyEngine:
     def _evaluate_position(self, pos, market_data_provider):
         code = pos['code']
         strategy_id, strategy = self._configured_strategy(code)
+        partial_key = (pos['account_id'], code, strategy_id)
+        partial_exit_blocked = self._partial_exit_state.contains(*partial_key)
         market_data = self._market_data_for(code, market_data_provider)
         should_sell, sell_fraction, reason = strategy.should_sell(
             pos,
@@ -146,11 +148,10 @@ class PerStockStrategyEngine:
             raise ValueError("strategy sell fraction is invalid")
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("strategy reason must be a non-empty string")
-        partial_key = (pos['account_id'], code, strategy_id)
         if (
             should_sell
             and sell_fraction < 1
-            and self._partial_exit_state.contains(*partial_key)
+            and partial_exit_blocked
         ):
             should_sell = False
             sell_fraction = 0.0

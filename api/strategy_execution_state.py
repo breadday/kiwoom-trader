@@ -1,15 +1,22 @@
 """Durable one-shot state for strategy partial exits."""
 
 from collections.abc import Mapping
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import tempfile
 
+from .scan_scheduling import FileRunLock, ScanAlreadyRunningError
+
 
 _MAX_STATE_FILE_BYTES = 1_000_000
 _MAX_ENTRIES = 1_000
 _VALID_STATUSES = {"pending", "filled"}
+
+
+class PartialExitStateBusyError(RuntimeError):
+    """Raised when another process is updating the partial-exit state."""
 
 
 class PartialExitStateStore:
@@ -26,38 +33,66 @@ class PartialExitStateStore:
             if not isinstance(raw_path, str) or not raw_path.strip() or "\x00" in raw_path:
                 raise ValueError("partial-exit state path has an invalid format")
             self.path = Path(raw_path)
+        self.lock_path = None if self.path is None else Path(f"{self.path}.lock")
         self._entries = self._load()
 
     def contains(self, account_id, code, strategy_id):
-        return self._key(account_id, code, strategy_id) in self._entries
+        key = self._key(account_id, code, strategy_id)
+        with self._locked():
+            return key in self._entries
 
     def reserve(self, account_id, code, strategy_id):
         key = self._key(account_id, code, strategy_id)
-        if key in self._entries:
-            return False
-        if len(self._entries) >= _MAX_ENTRIES:
-            raise RuntimeError("partial-exit state has too many entries")
-        self._update(key, "pending")
-        return True
+        with self._locked():
+            if key in self._entries:
+                return False
+            if len(self._entries) >= _MAX_ENTRIES:
+                raise RuntimeError("partial-exit state has too many entries")
+            self._update(key, "pending")
+            return True
 
     def confirm(self, account_id, code, strategy_id):
         key = self._key(account_id, code, strategy_id)
-        if key not in self._entries:
-            raise RuntimeError("partial exit has no reservation")
-        self._update(key, "filled")
+        with self._locked():
+            if key not in self._entries:
+                raise RuntimeError("partial exit has no reservation")
+            self._update(key, "filled")
 
     def release(self, account_id, code, strategy_id):
         key = self._key(account_id, code, strategy_id)
-        if key not in self._entries:
-            return False
-        previous = dict(self._entries)
-        del self._entries[key]
+        with self._locked():
+            if key not in self._entries:
+                return False
+            previous = dict(self._entries)
+            del self._entries[key]
+            try:
+                self._persist()
+            except Exception:
+                self._entries = previous
+                raise
+            return True
+
+    @contextmanager
+    def _locked(self):
+        if self.lock_path is None:
+            yield
+            return
+        lock = FileRunLock(self.lock_path)
         try:
-            self._persist()
-        except Exception:
-            self._entries = previous
-            raise
-        return True
+            lock.acquire()
+        except ScanAlreadyRunningError:
+            raise PartialExitStateBusyError(
+                "partial-exit state is being updated by another process"
+            ) from None
+        except RuntimeError:
+            raise RuntimeError(
+                "partial-exit state lock file could not be opened"
+            ) from None
+        try:
+            self._entries = self._load()
+            yield
+        finally:
+            lock.release()
 
     def _update(self, key, status):
         previous = dict(self._entries)
