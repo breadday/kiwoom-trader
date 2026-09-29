@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 from api.strategy_engine import (
@@ -293,6 +296,151 @@ class StrategyEngineSelectionTests(unittest.TestCase):
             manager.sell_calls,
             [("paper-1", "005930", 2), ("paper-1", "005930", 2)],
         )
+
+    def test_partial_exit_state_suppresses_duplicate_after_restart(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "partial-exits.json")
+            first_manager = FakeManager([position("005930", -25, qty=4)])
+            first_engine = PerStockStrategyEngine(
+                first_manager,
+                partial_exit_state_file=state_file,
+            )
+            first_engine.set_strategy("005930", "RESCUE")
+            first_engine.run_single("005930", lambda _code: {})
+
+            second_manager = FakeManager([position("005930", -25, qty=4)])
+            second_engine = PerStockStrategyEngine(
+                second_manager,
+                partial_exit_state_file=state_file,
+            )
+            second_engine.set_strategy("005930", "RESCUE")
+            result = second_engine.run_single("005930", lambda _code: {})
+
+            self.assertFalse(result["should_sell"])
+            self.assertEqual(second_manager.sell_calls, [])
+
+    def test_partial_exit_reservation_is_persisted_before_sell(self):
+        with TemporaryDirectory() as directory:
+            state_file = Path(directory) / "partial-exits.json"
+            manager = FakeManager([position("005930", -25, qty=4)])
+
+            def verify_pending_then_sell(account_id, code, qty):
+                payload = json.loads(state_file.read_text(encoding="utf-8"))
+                self.assertEqual(payload["entries"][0]["status"], "pending")
+                return FakeManager.sell_stock(manager, account_id, code, qty)
+
+            manager.sell_stock = verify_pending_then_sell
+            engine = PerStockStrategyEngine(
+                manager,
+                partial_exit_state_file=str(state_file),
+            )
+            engine.set_strategy("005930", "RESCUE")
+
+            engine.run_single("005930", lambda _code: {})
+
+            payload = json.loads(state_file.read_text(encoding="utf-8"))
+            self.assertEqual(payload["entries"][0]["status"], "filled")
+
+    def test_failed_partial_exit_is_released_from_durable_state(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "partial-exits.json")
+            first_manager = FakeManager([position("005930", -25, qty=4)])
+            first_manager.sell_stock = lambda *_args: {"error": "paper failure"}
+            first_engine = PerStockStrategyEngine(
+                first_manager,
+                partial_exit_state_file=state_file,
+            )
+            first_engine.set_strategy("005930", "RESCUE")
+            first_engine.run_single("005930", lambda _code: {})
+
+            second_manager = FakeManager([position("005930", -25, qty=4)])
+            second_engine = PerStockStrategyEngine(
+                second_manager,
+                partial_exit_state_file=state_file,
+            )
+            second_engine.set_strategy("005930", "RESCUE")
+            result = second_engine.run_single("005930", lambda _code: {})
+
+            self.assertTrue(result["should_sell"])
+            self.assertEqual(second_manager.sell_calls, [("paper-1", "005930", 2)])
+
+    def test_partial_exit_exception_remains_pending_after_restart(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "partial-exits.json")
+            first_manager = FakeManager([position("005930", -25, qty=4)])
+
+            def uncertain_sell(*_args):
+                raise RuntimeError("broker result unknown")
+
+            first_manager.sell_stock = uncertain_sell
+            first_engine = PerStockStrategyEngine(
+                first_manager,
+                partial_exit_state_file=state_file,
+            )
+            first_engine.set_strategy("005930", "RESCUE")
+
+            with self.assertRaisesRegex(RuntimeError, "result unknown"):
+                first_engine.run_single("005930", lambda _code: {})
+
+            second_manager = FakeManager([position("005930", -25, qty=4)])
+            second_engine = PerStockStrategyEngine(
+                second_manager,
+                partial_exit_state_file=state_file,
+            )
+            second_engine.set_strategy("005930", "RESCUE")
+            result = second_engine.run_single("005930", lambda _code: {})
+
+            self.assertFalse(result["should_sell"])
+            self.assertEqual(second_manager.sell_calls, [])
+
+    def test_corrupt_partial_exit_state_fails_before_evaluation(self):
+        with TemporaryDirectory() as directory:
+            state_file = Path(directory) / "partial-exits.json"
+            state_file.write_text("not-json", encoding="utf-8")
+            manager = FakeManager([position("005930", -25, qty=4)])
+
+            with self.assertRaisesRegex(ValueError, "partial-exit state file"):
+                PerStockStrategyEngine(
+                    manager,
+                    partial_exit_state_file=str(state_file),
+                )
+
+            self.assertEqual(manager.sell_calls, [])
+
+    def test_unwritable_partial_exit_state_fails_before_sell(self):
+        with TemporaryDirectory() as directory:
+            blocked_parent = Path(directory) / "not-a-directory"
+            blocked_parent.write_text("blocked", encoding="utf-8")
+            manager = FakeManager([position("005930", -25, qty=4)])
+            engine = PerStockStrategyEngine(
+                manager,
+                partial_exit_state_file=str(blocked_parent / "state.json"),
+            )
+            engine.set_strategy("005930", "RESCUE")
+
+            with self.assertRaisesRegex(RuntimeError, "could not be written"):
+                engine.run_single("005930", lambda _code: {})
+
+            self.assertEqual(manager.sell_calls, [])
+
+    def test_explicit_reset_allows_a_new_partial_exit_campaign(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "partial-exits.json")
+            manager = FakeManager([position("005930", -25, qty=4)])
+            engine = PerStockStrategyEngine(
+                manager,
+                partial_exit_state_file=state_file,
+            )
+            engine.set_strategy("005930", "RESCUE")
+            engine.run_single("005930", lambda _code: {})
+
+            self.assertTrue(engine.reset_partial_exit("paper-1", "005930"))
+            engine.run_single("005930", lambda _code: {})
+
+            self.assertEqual(
+                manager.sell_calls,
+                [("paper-1", "005930", 2), ("paper-1", "005930", 2)],
+            )
 
 
 if __name__ == "__main__":

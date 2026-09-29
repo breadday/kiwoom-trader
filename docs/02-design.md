@@ -22,6 +22,7 @@ graph TD
 | Position | code, qty, avg, cur, pl, pl_pct | int/float | 보유종목 |
 | Account | id, broker, name, cash, eval | string/int | 증권사 계좌 |
 | StrategyMapping | code -> strategy_id | dict | 종목별 전략 |
+| PartialExitState | account_id, code, strategy, status | string | pending/filled one-shot state |
 | BacktestResult | total_return, win_rate, mdd, sharpe, score | float | 최적화 결과 |
 
 ## 3. API Spec

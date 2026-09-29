@@ -6,6 +6,7 @@ from collections.abc import Mapping
 import math
 from typing import Dict
 from .multi_broker_api import MultiAccountManager
+from .strategy_execution_state import PartialExitStateStore
 
 
 class MarketDataRequiredError(RuntimeError):
@@ -77,10 +78,17 @@ class PerStockStrategyEngine:
     종목별로 전략 선택 -> 그 전략대로 매매 실행
     예: {"005935": "FACTOR", "441680": "RESCUE", "067310": "BULL_FLAG"}
     """
-    def __init__(self, manager: MultiAccountManager):
+    def __init__(
+        self,
+        manager: MultiAccountManager,
+        *,
+        partial_exit_state_file=None,
+    ):
         self.manager = manager
         self.stock_strategies: Dict[str, str] = {}  # code -> strategy_id
-        self._completed_partial_exits = set()
+        self._partial_exit_state = PartialExitStateStore(
+            partial_exit_state_file
+        )
 
     def set_strategy(self, code: str, strategy_id: str):
         """종목별 전략 설정"""
@@ -142,7 +150,7 @@ class PerStockStrategyEngine:
         if (
             should_sell
             and sell_fraction < 1
-            and partial_key in self._completed_partial_exits
+            and self._partial_exit_state.contains(*partial_key)
         ):
             should_sell = False
             sell_fraction = 0.0
@@ -166,23 +174,44 @@ class PerStockStrategyEngine:
         if action.get("error") is not None:
             return action
         if action['should_sell']:
-            action['executed'] = self.manager.sell_stock(
+            partial_key = (
                 action['account_id'],
                 action['code'],
-                action['sell_qty'],
+                action['strategy'],
             )
-            if (
-                action['sell_fraction'] < 1
-                and isinstance(action['executed'], Mapping)
-                and action['executed'].get('status') == 'filled'
-            ):
-                self._completed_partial_exits.add(
-                    (
-                        action['account_id'],
-                        action['code'],
-                        action['strategy'],
-                    )
+            is_partial = action['sell_fraction'] < 1
+            if is_partial and not self._partial_exit_state.reserve(*partial_key):
+                action['should_sell'] = False
+                action['sell_fraction'] = 0.0
+                action['sell_qty'] = 0
+                action['reason'] = (
+                    f"{action['reason']} (partial exit already reserved)"
                 )
+                return action
+            try:
+                action['executed'] = self.manager.sell_stock(
+                    action['account_id'],
+                    action['code'],
+                    action['sell_qty'],
+                )
+            except Exception:
+                raise
+            if is_partial:
+                if (
+                    isinstance(action['executed'], Mapping)
+                    and action['executed'].get('status') == 'filled'
+                ):
+                    self._partial_exit_state.confirm(*partial_key)
+                elif (
+                    isinstance(action['executed'], Mapping)
+                    and action['executed'].get('error') is not None
+                ):
+                    self._partial_exit_state.release(*partial_key)
+                else:
+                    raise RuntimeError(
+                        "partial exit result is indeterminate; "
+                        "reservation remains pending"
+                    )
             print(
                 f"[매매실행] {action['account_name']} {action['code']} "
                 f"{action['strategy']} -> 매도 {action['reason']}"
@@ -193,6 +222,15 @@ class PerStockStrategyEngine:
                 f"{action['strategy']} -> {action['reason']}"
             )
         return action
+
+    def reset_partial_exit(self, account_id: str, code: str):
+        """Explicitly allow a new partial-exit campaign for one position."""
+        strategy_id, _strategy = self._configured_strategy(code)
+        return self._partial_exit_state.release(
+            account_id,
+            code,
+            strategy_id,
+        )
 
     def run(self, market_data_provider=None):
         """
