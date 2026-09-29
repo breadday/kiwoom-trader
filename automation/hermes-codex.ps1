@@ -73,7 +73,8 @@ $safety = @"
 - 계좌, credential, token, .env, *.key, config_live.py, accounts.yaml을 읽지 않는다.
 - 실계좌·paper/live 주문·주문 제출·브로커 쓰기 API를 호출하지 않는다.
 - 모드가 implement가 아니면 파일을 생성·수정·삭제·이동하지 않는다.
-- 커밋·푸시·브랜치 변경을 하지 않는다.
+- 테스트와 독립 리뷰 통과 후 현재 브랜치의 비강제 commit 및 push를 허용한다.
+- force-push, 브랜치 삭제, 이력 재작성은 별도 명시 승인 없이는 금지한다.
 
 작업 지시:
 $task
