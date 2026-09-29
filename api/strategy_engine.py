@@ -108,6 +108,47 @@ class PerStockStrategyEngine:
             raise ValueError("market data provider must return a mapping")
         return dict(market_data)
 
+    def _evaluate_position(self, pos, market_data_provider):
+        code = pos['code']
+        strategy_id, strategy = self._configured_strategy(code)
+        market_data = self._market_data_for(code, market_data_provider)
+        should_sell, reason = strategy.should_sell(pos, market_data)
+        if not isinstance(should_sell, bool):
+            raise ValueError("strategy sell decision must be boolean")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("strategy reason must be a non-empty string")
+        return {
+            "code": code,
+            "account_id": pos['account_id'],
+            "account_name": pos['account_name'],
+            "broker": pos['broker'],
+            "strategy": strategy_id,
+            "should_sell": should_sell,
+            "reason": reason,
+            "qty": pos['qty'],
+            "cur": pos['cur'],
+        }
+
+    def _execute_action(self, action):
+        if action.get("error") is not None:
+            return action
+        if action['should_sell']:
+            action['executed'] = self.manager.sell_stock(
+                action['account_id'],
+                action['code'],
+                action['qty'],
+            )
+            print(
+                f"[매매실행] {action['account_name']} {action['code']} "
+                f"{action['strategy']} -> 매도 {action['reason']}"
+            )
+        else:
+            print(
+                f"[홀딩] {action['account_name']} {action['code']} "
+                f"{action['strategy']} -> {action['reason']}"
+            )
+        return action
+
     def run(self, market_data_provider=None):
         """
         모든 포지션에 대해 설정된 전략 실행
@@ -117,37 +158,11 @@ class PerStockStrategyEngine:
             market_data_provider
         )
         balances = self.manager.get_all_balances()
-        actions = []
-
-        for pos in balances['all_positions']:
-            code = pos['code']
-            strategy_id, strategy = self._configured_strategy(code)
-            market_data = self._market_data_for(code, market_data_provider)
-
-            should_sell, reason = strategy.should_sell(pos, market_data)
-
-            action = {
-                "code": code,
-                "account_id": pos['account_id'],
-                "account_name": pos['account_name'],
-                "broker": pos['broker'],
-                "strategy": strategy_id,
-                "should_sell": should_sell,
-                "reason": reason,
-                "qty": pos['qty'],
-                "cur": pos['cur']
-            }
-            actions.append(action)
-
-            if should_sell:
-                # 실제 매도 실행 (paper 모드면 모의)
-                result = self.manager.sell_stock(pos['account_id'], code, pos['qty'])
-                action['executed'] = result
-                print(f"[매매실행] {pos['account_name']} {code} {strategy_id} -> 매도 {reason}")
-            else:
-                print(f"[홀딩] {pos['account_name']} {code} {strategy_id} -> {reason}")
-
-        return actions
+        actions = [
+            self._evaluate_position(pos, market_data_provider)
+            for pos in balances['all_positions']
+        ]
+        return [self._execute_action(action) for action in actions]
 
     def run_single(self, code: str, market_data_provider=None):
         """Evaluate and, when signalled, paper-execute one held stock."""
@@ -158,32 +173,39 @@ class PerStockStrategyEngine:
         for pos in balances['all_positions']:
             if pos['code'] != code:
                 continue
-
-            strategy_id, strategy = self._configured_strategy(code)
-            market_data = self._market_data_for(code, market_data_provider)
-
-            should_sell, reason = strategy.should_sell(pos, market_data)
-            action = {
-                "code": code,
-                "account_id": pos['account_id'],
-                "account_name": pos['account_name'],
-                "broker": pos['broker'],
-                "strategy": strategy_id,
-                "should_sell": should_sell,
-                "reason": reason,
-                "qty": pos['qty'],
-                "cur": pos['cur'],
-            }
-            if should_sell:
-                action['executed'] = self.manager.sell_stock(pos['account_id'], code, pos['qty'])
-            return action
+            action = self._evaluate_position(pos, market_data_provider)
+            return self._execute_action(action)
 
         return {"error": f"{code} 보유종목 없음"}
 
     def run_selected(self, codes: list[str], market_data_provider=None):
         """Evaluate the requested stock codes in the given order."""
-        self._require_market_data_provider(market_data_provider)
-        return [self.run_single(code, market_data_provider) for code in codes]
+        market_data_provider = self._require_market_data_provider(
+            market_data_provider
+        )
+        if not isinstance(codes, list) or any(
+            not isinstance(code, str) or len(code) != 6 or not code.isdigit()
+            for code in codes
+        ):
+            raise ValueError("codes must be a list of six-digit strings")
+        if len(set(codes)) != len(codes):
+            raise ValueError("selected codes must be unique")
+
+        positions = self.manager.get_all_balances()['all_positions']
+        first_position_by_code = {}
+        for pos in positions:
+            first_position_by_code.setdefault(pos['code'], pos)
+
+        actions = []
+        for code in codes:
+            pos = first_position_by_code.get(code)
+            if pos is None:
+                actions.append({"error": f"{code} 보유종목 없음"})
+            else:
+                actions.append(
+                    self._evaluate_position(pos, market_data_provider)
+                )
+        return [self._execute_action(action) for action in actions]
 
 if __name__ == "__main__":
     mgr = MultiAccountManager("/mnt/data/kiwoom_trader/accounts.yaml")

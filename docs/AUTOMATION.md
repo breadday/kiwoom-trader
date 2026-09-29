@@ -11,6 +11,7 @@
 - [x] 스캔 OHLCV 유한수 검증 (NaN/Infinity fail-closed)
 - [x] 멀티 브로커 잔고 안전성 (명시적 paper 설정만 허용, live/mock 혼동 차단)
 - [x] 전략 엔진 합성 fallback 제거 (명시적 전략·market-data provider 필수)
+- [x] 다중 종목 전략 사전평가 (전체 검증 후 paper action 실행)
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -36,7 +37,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 129개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 133개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -128,4 +129,8 @@
 - 각 보유 종목은 `set_strategy` 또는 `set_strategies_bulk`로 전략을 명시해야 한다.
   전략이 없는 종목을 자동으로 `FACTOR`에 배정하지 않는다.
 - provider 결과가 mapping이 아니면 평가·paper 매도 전에 실패한다. 여러 종목을
-  실행할 때 모든 평가를 먼저 완료한 뒤 실행하는 preflight는 다음 안전 단위다.
+  실행할 때는 모든 포지션의 전략·market-data·판정 결과를 먼저 검증한 후에만
+  paper action을 순서대로 실행한다.
+- `run_selected`는 중복 종목코드를 평가 전에 거부해 같은 포지션을 두 번 매도하지
+  않으며, 선택 순서를 유지한다. 후속 종목의 검증 실패는 앞 종목의 paper action도
+  실행되기 전에 전파된다.

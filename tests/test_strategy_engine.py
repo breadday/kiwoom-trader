@@ -104,6 +104,68 @@ class StrategyEngineSelectionTests(unittest.TestCase):
 
         self.assertEqual(manager.sell_calls, [])
 
+    def test_run_preflights_every_position_before_any_sell(self):
+        manager = FakeManager([position("005930", -45), position("000660", -45)])
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+
+        with self.assertRaises(StrategyNotConfiguredError):
+            engine.run(lambda _code: {})
+
+        self.assertEqual(manager.sell_calls, [])
+
+    def test_run_selected_preflights_market_data_before_any_sell(self):
+        manager = FakeManager([position("005930", -45), position("000660", -45)])
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+        engine.set_strategy("000660", "RESCUE")
+
+        def provider(code):
+            return {} if code == "005930" else None
+
+        with self.assertRaisesRegex(ValueError, "market data"):
+            engine.run_selected(["005930", "000660"], provider)
+
+        self.assertEqual(manager.sell_calls, [])
+
+    def test_run_evaluates_all_positions_before_executing_actions(self):
+        events = []
+        manager = FakeManager([position("005930", -45), position("000660", -45)])
+
+        def sell_stock(account_id, code, qty):
+            events.append(f"sell:{code}")
+            return FakeManager.sell_stock(manager, account_id, code, qty)
+
+        manager.sell_stock = sell_stock
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+        engine.set_strategy("000660", "RESCUE")
+
+        actions = engine.run(
+            lambda code: events.append(f"data:{code}") or {}
+        )
+
+        self.assertEqual(
+            events,
+            ["data:005930", "data:000660", "sell:005930", "sell:000660"],
+        )
+        self.assertTrue(all(action["should_sell"] for action in actions))
+
+    def test_duplicate_selected_code_is_rejected_before_evaluation(self):
+        manager = FakeManager([position("005930", -45)])
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+        provider_calls = []
+
+        with self.assertRaisesRegex(ValueError, "unique"):
+            engine.run_selected(
+                ["005930", "005930"],
+                lambda code: provider_calls.append(code) or {},
+            )
+
+        self.assertEqual(provider_calls, [])
+        self.assertEqual(manager.sell_calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
