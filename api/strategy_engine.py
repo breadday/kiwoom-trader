@@ -2,8 +2,17 @@
 """
 종목별 전략 엔진 - 종목마다 다른 전략을 선택하면 그 전략대로 매매
 """
+from collections.abc import Mapping
 from typing import Dict
 from .multi_broker_api import MultiAccountManager
+
+
+class MarketDataRequiredError(RuntimeError):
+    """Raised when strategy evaluation has no explicit market-data provider."""
+
+
+class StrategyNotConfiguredError(RuntimeError):
+    """Raised when a held stock has no explicitly selected strategy."""
 
 class Strategy:
     def should_sell(self, pos: dict, market_data: dict) -> tuple[bool, str]:
@@ -74,30 +83,46 @@ class PerStockStrategyEngine:
         for code, strat in mapping.items():
             self.set_strategy(code, strat)
 
+    @staticmethod
+    def _require_market_data_provider(market_data_provider):
+        if market_data_provider is None:
+            raise MarketDataRequiredError(
+                "an explicit market data provider is required"
+            )
+        if not callable(market_data_provider):
+            raise TypeError("market_data_provider must be callable")
+        return market_data_provider
+
+    def _configured_strategy(self, code):
+        strategy_id = self.stock_strategies.get(code)
+        if strategy_id is None:
+            raise StrategyNotConfiguredError(
+                f"no strategy is configured for {code}"
+            )
+        return strategy_id, STRATEGIES[strategy_id]
+
+    @staticmethod
+    def _market_data_for(code, market_data_provider):
+        market_data = market_data_provider(code)
+        if not isinstance(market_data, Mapping):
+            raise ValueError("market data provider must return a mapping")
+        return dict(market_data)
+
     def run(self, market_data_provider=None):
         """
         모든 포지션에 대해 설정된 전략 실행
         market_data_provider: code -> market_data dict 반환 함수
         """
+        market_data_provider = self._require_market_data_provider(
+            market_data_provider
+        )
         balances = self.manager.get_all_balances()
         actions = []
 
         for pos in balances['all_positions']:
             code = pos['code']
-            strategy_id = self.stock_strategies.get(code, "FACTOR")  # 기본 Factor
-            strategy = STRATEGIES[strategy_id]
-
-            # 시장 데이터 (실전은 키움 시세 API)
-            market_data = {}
-            if market_data_provider:
-                market_data = market_data_provider(code)
-            else:
-                # mock 데이터 - 팩터 점수 등
-                market_data = {
-                    "factor_total": 30 if pos['pl_pct'] < -30 else 60,
-                    "is_bounce": pos['pl_pct'] > -5,
-                    "change_pct": pos['pl_pct']
-                }
+            strategy_id, strategy = self._configured_strategy(code)
+            market_data = self._market_data_for(code, market_data_provider)
 
             should_sell, reason = strategy.should_sell(pos, market_data)
 
@@ -126,21 +151,16 @@ class PerStockStrategyEngine:
 
     def run_single(self, code: str, market_data_provider=None):
         """Evaluate and, when signalled, paper-execute one held stock."""
+        market_data_provider = self._require_market_data_provider(
+            market_data_provider
+        )
         balances = self.manager.get_all_balances()
         for pos in balances['all_positions']:
             if pos['code'] != code:
                 continue
 
-            strategy_id = self.stock_strategies.get(code, "FACTOR")
-            strategy = STRATEGIES[strategy_id]
-            if market_data_provider:
-                market_data = market_data_provider(code)
-            else:
-                market_data = {
-                    "factor_total": 30 if pos['pl_pct'] < -30 else 60,
-                    "is_bounce": pos['pl_pct'] > -5,
-                    "change_pct": pos['pl_pct'],
-                }
+            strategy_id, strategy = self._configured_strategy(code)
+            market_data = self._market_data_for(code, market_data_provider)
 
             should_sell, reason = strategy.should_sell(pos, market_data)
             action = {
@@ -162,6 +182,7 @@ class PerStockStrategyEngine:
 
     def run_selected(self, codes: list[str], market_data_provider=None):
         """Evaluate the requested stock codes in the given order."""
+        self._require_market_data_provider(market_data_provider)
         return [self.run_single(code, market_data_provider) for code in codes]
 
 if __name__ == "__main__":

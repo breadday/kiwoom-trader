@@ -10,6 +10,7 @@
 - [x] Kiwoom 요청 throttle (단조시계, 동시 호출 직렬화, 최소 0.21초)
 - [x] 스캔 OHLCV 유한수 검증 (NaN/Infinity fail-closed)
 - [x] 멀티 브로커 잔고 안전성 (명시적 paper 설정만 허용, live/mock 혼동 차단)
+- [x] 전략 엔진 합성 fallback 제거 (명시적 전략·market-data provider 필수)
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -35,7 +36,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 126개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 129개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -118,3 +119,13 @@
   총계 계산 전에 실패한다.
 - 같은 종목이 여러 계좌에 있어도 계좌별 포지션을 유지하며 임의로 평균단가나
   수량을 합쳐 하나의 포지션으로 만들지 않는다.
+
+## 전략 엔진 입력 안전성
+
+- `PerStockStrategyEngine`은 `run`, `run_single`, `run_selected`에서 호출자가
+  제공한 market-data provider를 필수로 요구한다. provider가 없을 때 손익률로
+  가짜 factor/bounce/change 값을 생성하던 fallback은 제거했다.
+- 각 보유 종목은 `set_strategy` 또는 `set_strategies_bulk`로 전략을 명시해야 한다.
+  전략이 없는 종목을 자동으로 `FACTOR`에 배정하지 않는다.
+- provider 결과가 mapping이 아니면 평가·paper 매도 전에 실패한다. 여러 종목을
+  실행할 때 모든 평가를 먼저 완료한 뒤 실행하는 preflight는 다음 안전 단위다.
