@@ -2,8 +2,11 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+import json
 import os
+from pathlib import Path
 import re
+import tempfile
 from typing import Any
 
 from api.scanner import ScanItem
@@ -12,6 +15,7 @@ from api.scanner import ScanItem
 _BOT_TOKEN_PATTERN = re.compile(r"^[0-9]+:[A-Za-z0-9_-]+$")
 _MAX_MESSAGE_LENGTH = 4000
 _MAX_REASON_LENGTH = 240
+_MAX_STATE_FILE_BYTES = 1_000_000
 
 
 class TelegramDeliveryError(RuntimeError):
@@ -27,6 +31,7 @@ class TelegramConfig:
     bot_token: str = field(repr=False)
     chat_id: str
     timeout_seconds: float = 10.0
+    alert_state_file: str | None = None
 
     def __post_init__(self):
         if not isinstance(self.bot_token, str) or not _BOT_TOKEN_PATTERN.fullmatch(
@@ -46,6 +51,12 @@ class TelegramConfig:
             or self.timeout_seconds <= 0
         ):
             raise ValueError("timeout_seconds must be positive")
+        if self.alert_state_file is not None and (
+            not isinstance(self.alert_state_file, str)
+            or not self.alert_state_file.strip()
+            or "\x00" in self.alert_state_file
+        ):
+            raise ValueError("alert_state_file has an invalid format")
 
     @classmethod
     def from_env(cls, environ=None):
@@ -56,7 +67,11 @@ class TelegramConfig:
         chat_id = source.get("TELEGRAM_CHAT_ID")
         if token is None or chat_id is None:
             raise ValueError("Telegram credentials are not configured")
-        return cls(bot_token=token, chat_id=chat_id)
+        return cls(
+            bot_token=token,
+            chat_id=chat_id,
+            alert_state_file=source.get("KIWOOM_ALERT_STATE_FILE"),
+        )
 
 
 def _default_transport(url, **kwargs):
@@ -80,13 +95,19 @@ class TelegramScanResultSink:
             raise TypeError("transport must be callable")
         self.config = config
         self._transport = _default_transport if transport is None else transport
-        self._last_states = {}
+        self._last_states = self._load_states(config.alert_state_file)
 
     def __call__(self, batch):
         items = self._validate_batch(batch)
+        passive_state_changed = False
         for item in items:
             if item.status == "NO_MATCH":
-                self._last_states[item.code] = self._state_fingerprint(item)
+                fingerprint = self._state_fingerprint(item)
+                if self._last_states.get(item.code) != fingerprint:
+                    self._last_states[item.code] = fingerprint
+                    passive_state_changed = True
+        if passive_state_changed:
+            self._persist_states()
         actionable = [
             item
             for item in items
@@ -120,17 +141,96 @@ class TelegramScanResultSink:
             raise TelegramDeliveryError("Telegram rejected the alert")
         for item in actionable:
             self._last_states[item.code] = self._state_fingerprint(item)
+        self._persist_states()
         return True
 
     @staticmethod
     def _state_fingerprint(item):
-        return (
+        return [
             item.status,
             item.reason,
             item.latest_date,
             item.latest_close,
             item.latest_volume,
+        ]
+
+    @classmethod
+    def _load_states(cls, state_file):
+        if state_file is None:
+            return {}
+        path = Path(state_file)
+        try:
+            if path.stat().st_size > _MAX_STATE_FILE_BYTES:
+                raise ValueError("alert state file is too large")
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except ValueError:
+            raise ValueError("alert state file is invalid") from None
+        except OSError:
+            raise ValueError("alert state file could not be read") from None
+
+        if (
+            not isinstance(payload, Mapping)
+            or payload.get("version") != 1
+            or not isinstance(payload.get("states"), Mapping)
+        ):
+            raise ValueError("alert state file is invalid")
+        states = dict(payload["states"])
+        if any(
+            not isinstance(code, str)
+            or len(code) != 6
+            or not code.isdigit()
+            or not cls._valid_fingerprint(fingerprint)
+            for code, fingerprint in states.items()
+        ):
+            raise ValueError("alert state file is invalid")
+        return states
+
+    @staticmethod
+    def _valid_fingerprint(value):
+        return (
+            isinstance(value, list)
+            and len(value) == 5
+            and value[0] in {"MATCH", "NO_MATCH", "ERROR"}
+            and isinstance(value[1], str)
+            and bool(value[1].strip())
         )
+
+    def _persist_states(self):
+        if self.config.alert_state_file is None:
+            return
+        path = Path(self.config.alert_state_file)
+        temporary_path = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                json.dump(
+                    {"version": 1, "states": self._last_states},
+                    temporary,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                )
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.replace(temporary_path, path)
+        except (OSError, TypeError, ValueError):
+            raise RuntimeError("alert state file could not be written") from None
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     @staticmethod
     def _validate_batch(batch):

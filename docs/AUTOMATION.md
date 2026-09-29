@@ -22,7 +22,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 100개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 104개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -51,8 +51,14 @@
   같은 `MATCH`/`ERROR`를 재전송하지 않는다. `NO_MATCH` 전환 후 다시 발생하거나
   fingerprint가 달라지면 새 알림으로 전송한다.
 - Telegram 전송이 실패한 결과는 전송 완료 상태로 기록하지 않아 다음 주기에
-  다시 시도한다. 현재 중복 상태는 메모리에만 유지되므로 프로세스 재시작을 넘는
-  영속 중복 방지는 별도 상태 저장소가 필요하다.
+  다시 시도한다.
+- `KIWOOM_ALERT_STATE_FILE`을 지정하면 버전이 있는 JSON 상태를 임시 파일 작성 후
+  원자적으로 교체한다. 새 프로세스도 같은 파일을 읽어 동일 알림을 억제하며, 손상·
+  과대 상태 파일은 네트워크 호출 전에 거부한다. 로컬 단일 스케줄러 권장값은
+  `automation/runs/telegram-alert-state.json`이며 이 디렉터리는 Git에서 제외된다.
+- 상태 파일을 지정하지 않으면 기존처럼 프로세스 메모리에서만 중복을 억제한다.
+  Vercel의 임시 파일시스템은 실행 간 영속성을 보장하지 않으므로 배포 환경에서는
+  외부 durable store를 연결하기 전까지 이 파일 옵션을 영속 저장소로 간주하지 않는다.
 - Telegram 응답 실패와 전송 예외는 토큰, 요청 URL, 응답 본문을 노출하지 않는
   `TelegramDeliveryError`로 변환한다.
 - 메시지는 4,000자로 제한하며 초과 항목 수를 표시한다.

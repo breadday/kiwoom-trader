@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from api.scanner import ScanItem
 from api.telegram_notifications import (
@@ -68,6 +70,20 @@ class TelegramScanResultSinkTests(unittest.TestCase):
             with self.subTest(environ=environ):
                 with self.assertRaises(ValueError):
                     TelegramConfig.from_env(environ)
+
+    def test_environment_factory_reads_optional_alert_state_file(self):
+        config = TelegramConfig.from_env(
+            {
+                "TELEGRAM_BOT_TOKEN": "123456:TEST_token",
+                "TELEGRAM_CHAT_ID": "123",
+                "KIWOOM_ALERT_STATE_FILE": "runtime/telegram-alert-state.json",
+            }
+        )
+
+        self.assertEqual(
+            config.alert_state_file,
+            "runtime/telegram-alert-state.json",
+        )
 
     def test_delivery_failures_never_expose_token_or_response_body(self):
         token = "123456:SUPER_SECRET_token"
@@ -201,6 +217,82 @@ class TelegramScanResultSinkTests(unittest.TestCase):
             sink(batch)
         self.assertTrue(sink(batch))
         self.assertEqual(len(attempts), 2)
+
+    def test_state_file_suppresses_duplicate_after_process_restart(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "alert-state.json")
+            config = TelegramConfig(
+                bot_token="123456:TEST_token",
+                chat_id="123",
+                alert_state_file=state_file,
+            )
+            calls = []
+
+            def transport(_url, **kwargs):
+                calls.append(kwargs["json"]["text"])
+                return FakeResponse()
+
+            batch = [
+                ScanItem(
+                    "005930", "MATCH", True, "breakout", "20260929", 72000, 1000
+                )
+            ]
+
+            self.assertTrue(TelegramScanResultSink(config, transport=transport)(batch))
+            self.assertFalse(TelegramScanResultSink(config, transport=transport)(batch))
+            self.assertEqual(len(calls), 1)
+
+    def test_persisted_no_match_allows_later_match_after_restart(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "alert-state.json")
+            config = TelegramConfig(
+                bot_token="123456:TEST_token",
+                chat_id="123",
+                alert_state_file=state_file,
+            )
+            calls = []
+
+            def transport(_url, **kwargs):
+                calls.append(kwargs["json"]["text"])
+                return FakeResponse()
+
+            match = ScanItem(
+                "005930", "MATCH", True, "breakout", "20260929", 72000, 1000
+            )
+            no_match = ScanItem(
+                "005930",
+                "NO_MATCH",
+                False,
+                "signal cleared",
+                "20260930",
+                71000,
+                900,
+            )
+
+            self.assertTrue(TelegramScanResultSink(config, transport=transport)([match]))
+            self.assertFalse(
+                TelegramScanResultSink(config, transport=transport)([no_match])
+            )
+            self.assertTrue(TelegramScanResultSink(config, transport=transport)([match]))
+            self.assertEqual(len(calls), 2)
+
+    def test_corrupt_state_file_fails_before_network(self):
+        with TemporaryDirectory() as directory:
+            state_file = Path(directory) / "alert-state.json"
+            state_file.write_text("not-json", encoding="utf-8")
+            calls = []
+
+            with self.assertRaisesRegex(ValueError, "alert state file"):
+                TelegramScanResultSink(
+                    TelegramConfig(
+                        bot_token="123456:TEST_token",
+                        chat_id="123",
+                        alert_state_file=str(state_file),
+                    ),
+                    transport=lambda *args, **kwargs: calls.append((args, kwargs)),
+                )
+
+            self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":
