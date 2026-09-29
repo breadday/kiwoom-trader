@@ -3,6 +3,7 @@
 종목별 전략 엔진 - 종목마다 다른 전략을 선택하면 그 전략대로 매매
 """
 from collections.abc import Mapping
+import math
 from typing import Dict
 from .multi_broker_api import MultiAccountManager
 
@@ -19,8 +20,12 @@ class AmbiguousPositionError(RuntimeError):
     """Raised when a stock-only request matches more than one account."""
 
 class Strategy:
-    def should_sell(self, pos: dict, market_data: dict) -> tuple[bool, str]:
-        """return (sell?, reason)"""
+    def should_sell(
+        self,
+        pos: dict,
+        market_data: dict,
+    ) -> tuple[bool, float, str]:
+        """Return (sell?, fraction of current quantity, reason)."""
         pass
 
 class ORBStrategy(Strategy):
@@ -28,36 +33,36 @@ class ORBStrategy(Strategy):
     def should_sell(self, pos, market_data):
         # 예: 9:30 이전에 -2% 이상이면 손절
         if market_data.get('change_pct', 0) < -2.0:
-            return True, "ORB 손절 -2%"
-        return False, "ORB 홀딩"
+            return True, 1.0, "ORB 손절 -2%"
+        return False, 0.0, "ORB 홀딩"
 
 class BullFlagStrategy(Strategy):
     """불플래그 - 3-5일 추세 유지, 이탈시 매도"""
     def should_sell(self, pos, market_data):
         # 거래대금 급감시 매도
         if market_data.get('volume_drop', False):
-            return True, "불플래그 거래대금 이탈"
-        return False, "불플래그 추세 유지"
+            return True, 1.0, "불플래그 거래대금 이탈"
+        return False, 0.0, "불플래그 추세 유지"
 
 class FactorStrategy(Strategy):
     """팩터 스윙 - 팩터 점수 50점 이하이면 반등시 매도"""
     def should_sell(self, pos, market_data):
         factor = market_data.get('factor_total', 50)
         if factor < 40:
-            return True, f"팩터 점수 {factor} - 즉시정리"
+            return True, 1.0, f"팩터 점수 {factor} - 즉시정리"
         if factor < 50 and market_data.get('is_bounce', False):
-            return True, f"팩터 {factor} 반등시 분할매도"
-        return False, f"팩터 {factor} HOLD"
+            return True, 0.5, f"팩터 {factor} 반등시 분할매도"
+        return False, 0.0, f"팩터 {factor} HOLD"
 
 class RescueStrategy(Strategy):
     """구조조정 - 계좌 구조조정 전용"""
     def should_sell(self, pos, market_data):
         pl_pct = pos.get('pl_pct', 0)
         if pl_pct < -40:
-            return True, f"구조조정 즉시정리 {pl_pct:.1f}%"
+            return True, 1.0, f"구조조정 즉시정리 {pl_pct:.1f}%"
         if pl_pct < -20:
-            return True, f"구조조정 분할매도 {pl_pct:.1f}%"
-        return False, "구조조정 HOLD"
+            return True, 0.5, f"구조조정 분할매도 {pl_pct:.1f}%"
+        return False, 0.0, "구조조정 HOLD"
 
 # 전략 팩토리
 STRATEGIES = {
@@ -75,6 +80,7 @@ class PerStockStrategyEngine:
     def __init__(self, manager: MultiAccountManager):
         self.manager = manager
         self.stock_strategies: Dict[str, str] = {}  # code -> strategy_id
+        self._completed_partial_exits = set()
 
     def set_strategy(self, code: str, strategy_id: str):
         """종목별 전략 설정"""
@@ -116,11 +122,32 @@ class PerStockStrategyEngine:
         code = pos['code']
         strategy_id, strategy = self._configured_strategy(code)
         market_data = self._market_data_for(code, market_data_provider)
-        should_sell, reason = strategy.should_sell(pos, market_data)
+        should_sell, sell_fraction, reason = strategy.should_sell(
+            pos,
+            market_data,
+        )
         if not isinstance(should_sell, bool):
             raise ValueError("strategy sell decision must be boolean")
+        if (
+            isinstance(sell_fraction, bool)
+            or not isinstance(sell_fraction, (int, float))
+            or not math.isfinite(sell_fraction)
+            or (should_sell and not 0 < sell_fraction <= 1)
+            or (not should_sell and sell_fraction != 0)
+        ):
+            raise ValueError("strategy sell fraction is invalid")
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("strategy reason must be a non-empty string")
+        partial_key = (pos['account_id'], code, strategy_id)
+        if (
+            should_sell
+            and sell_fraction < 1
+            and partial_key in self._completed_partial_exits
+        ):
+            should_sell = False
+            sell_fraction = 0.0
+            reason = f"{reason} (partial exit already executed)"
+        sell_qty = math.ceil(pos['qty'] * sell_fraction) if should_sell else 0
         return {
             "code": code,
             "account_id": pos['account_id'],
@@ -128,6 +155,8 @@ class PerStockStrategyEngine:
             "broker": pos['broker'],
             "strategy": strategy_id,
             "should_sell": should_sell,
+            "sell_fraction": sell_fraction,
+            "sell_qty": sell_qty,
             "reason": reason,
             "qty": pos['qty'],
             "cur": pos['cur'],
@@ -140,8 +169,20 @@ class PerStockStrategyEngine:
             action['executed'] = self.manager.sell_stock(
                 action['account_id'],
                 action['code'],
-                action['qty'],
+                action['sell_qty'],
             )
+            if (
+                action['sell_fraction'] < 1
+                and isinstance(action['executed'], Mapping)
+                and action['executed'].get('status') == 'filled'
+            ):
+                self._completed_partial_exits.add(
+                    (
+                        action['account_id'],
+                        action['code'],
+                        action['strategy'],
+                    )
+                )
             print(
                 f"[매매실행] {action['account_name']} {action['code']} "
                 f"{action['strategy']} -> 매도 {action['reason']}"

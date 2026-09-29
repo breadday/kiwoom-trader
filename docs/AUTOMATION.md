@@ -13,6 +13,7 @@
 - [x] 전략 엔진 합성 fallback 제거 (명시적 전략·market-data provider 필수)
 - [x] 다중 종목 전략 사전평가 (전체 검증 후 paper action 실행)
 - [x] 다계좌 동일 종목 모호성 차단 (명시적 account_id+code 실행 경로)
+- [x] 전략 분할매도 수량화 및 성공 체결 1회 래치
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -38,7 +39,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 136개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 140개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -139,3 +140,11 @@
   `run_selected`는 provider 조회와 paper 매도 전에 `AmbiguousPositionError`로
   중단한다. 특정 포지션은 `run_account_position(account_id, code, provider)`로
   계좌와 종목을 함께 지정해야 하며, 해당 계좌의 포지션만 실행한다.
+- 각 전략 판정은 `should_sell`, `sell_fraction`, `reason`을 반환한다. 즉시정리와
+  손절은 현재 수량 전부, RESCUE·FACTOR 분할매도는 현재 수량의 50%를 매도하며
+  홀수 수량은 위험 축소 방향으로 올림한다.
+- 성공(`status=filled`)한 분할매도만 계좌·종목·전략별로 엔진 인스턴스에 기록해
+  같은 인스턴스의 반복 실행을 막는다. 실패 응답은 래치하지 않아 재시도할 수 있고,
+  이후 즉시정리 신호는 래치와 관계없이 현재 잔량 전부를 매도한다.
+- 현재 래치는 프로세스 메모리 범위다. 프로세스 재시작을 넘는 자동 실행에는
+  포지션 캠페인 식별자를 포함한 durable execution state가 추가로 필요하다.

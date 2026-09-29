@@ -21,14 +21,14 @@ class FakeManager:
         return {"status": "filled", "simulated": True}
 
 
-def position(code, pl_pct, account_id="paper-1"):
+def position(code, pl_pct, account_id="paper-1", qty=2):
     return {
         "code": code,
         "account_id": account_id,
         "account_name": f"Paper account {account_id}",
         "broker": "kiwoom",
         "pl_pct": pl_pct,
-        "qty": 2,
+        "qty": qty,
         "cur": 10_000,
     }
 
@@ -225,6 +225,74 @@ class StrategyEngineSelectionTests(unittest.TestCase):
 
         self.assertEqual(provider_calls, [])
         self.assertEqual(manager.sell_calls, [])
+
+    def test_rescue_partial_exit_sells_half_once_with_odd_quantity_rounded_up(self):
+        manager = FakeManager([position("005930", -25, qty=5)])
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+
+        first = engine.run_single("005930", lambda _code: {})
+        second = engine.run_single("005930", lambda _code: {})
+
+        self.assertEqual(first["sell_fraction"], 0.5)
+        self.assertEqual(first["sell_qty"], 3)
+        self.assertTrue(first["should_sell"])
+        self.assertFalse(second["should_sell"])
+        self.assertEqual(second["sell_qty"], 0)
+        self.assertEqual(manager.sell_calls, [("paper-1", "005930", 3)])
+
+    def test_factor_partial_exit_sells_half_quantity(self):
+        manager = FakeManager([position("005930", 0, qty=4)])
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "FACTOR")
+
+        result = engine.run_single(
+            "005930",
+            lambda _code: {"factor_total": 45, "is_bounce": True},
+        )
+
+        self.assertEqual(result["sell_fraction"], 0.5)
+        self.assertEqual(result["sell_qty"], 2)
+        self.assertEqual(manager.sell_calls, [("paper-1", "005930", 2)])
+
+    def test_immediate_exit_can_sell_remainder_after_partial_exit(self):
+        pos = position("005930", -25, qty=5)
+        manager = FakeManager([pos])
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+
+        engine.run_single("005930", lambda _code: {})
+        pos["qty"] = 2
+        pos["pl_pct"] = -45
+        result = engine.run_single("005930", lambda _code: {})
+
+        self.assertEqual(result["sell_fraction"], 1.0)
+        self.assertEqual(result["sell_qty"], 2)
+        self.assertEqual(
+            manager.sell_calls,
+            [("paper-1", "005930", 3), ("paper-1", "005930", 2)],
+        )
+
+    def test_failed_partial_exit_is_not_latched(self):
+        manager = FakeManager([position("005930", -25, qty=4)])
+
+        def fail_sell(account_id, code, qty):
+            manager.sell_calls.append((account_id, code, qty))
+            return {"error": "paper failure"}
+
+        manager.sell_stock = fail_sell
+        engine = PerStockStrategyEngine(manager)
+        engine.set_strategy("005930", "RESCUE")
+
+        first = engine.run_single("005930", lambda _code: {})
+        second = engine.run_single("005930", lambda _code: {})
+
+        self.assertEqual(first["executed"], {"error": "paper failure"})
+        self.assertTrue(second["should_sell"])
+        self.assertEqual(
+            manager.sell_calls,
+            [("paper-1", "005930", 2), ("paper-1", "005930", 2)],
+        )
 
 
 if __name__ == "__main__":

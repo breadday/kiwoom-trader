@@ -27,7 +27,8 @@ graph TD
 ## 3. API Spec
 - POST /api/balance -> {accounts, summary, all_positions}
 - POST /api/strategy/set {code, strategy_id}
-- POST /api/strategy/run_single {code} -> {should_sell, reason}
+- POST /api/strategy/run_single {code} -> {should_sell, sell_fraction, sell_qty, reason}
+- POST /api/strategy/run_account_position {account_id, code} -> {should_sell, sell_fraction, sell_qty, reason}
 - POST /api/strategy/run_selected {codes: []}
 - POST /api/optimizer/run {code} -> BacktestResult[]
 - GET /api/optimizer/recommend -> {code: {strategy, params, expected}}
