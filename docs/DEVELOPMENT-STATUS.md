@@ -17,13 +17,15 @@
 - `api/index.py`: Vercel Python handler with environment-injected credentials and hard-coded paper mode.
 - `api/scanner.py`: explicit-universe read-only scanner and bounded/stoppable result runner with no order dependency.
 - `api/telegram_notifications.py`: environment-configured Telegram result sink for bounded MATCH/ERROR scan alerts, with secret-safe failures.
+- `api/scan_entrypoint.py`: environment-validated, paper-only composition entrypoint for one read-only scan-and-notify cycle with an explicitly injected evaluator.
 
 ## Verification
 
-- Full discovery passes 92 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
+- Full discovery passes 97 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
 - The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
 - Scan automation isolates provider/evaluator failures per symbol, validates daily bars before evaluation, and publishes result batches only through an injected sink.
 - Telegram notification tests verify actionable-only delivery, no-network behavior for NO_MATCH batches, credential fail-closed behavior, secret-safe errors, and the 4,000-character message boundary.
+- Scan entrypoint tests verify environment parsing, explicit evaluator injection, hard-coded paper mode, pre-request rejection of unsafe APIs, and exactly one published cycle.
 - The offline demo runner preloads trusted numerical dependencies before installing process/network guards, preventing pandas platform initialization from being misclassified as demo execution.
 - Fixture contract tests cover `ka10081`, `POST /api/dostk/chart`, continuation headers, normalized OHLCV rows, and fail-closed malformed responses.
 
@@ -34,3 +36,4 @@
 3. T8 entrypoint and deployment safety guide are implemented; actual Vercel deployment is blocked on CLI network approval, authentication, project linking, and secret registration. Live-account transition remains disabled.
 4. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.
 5. Live Telegram delivery remains gated on approved network access and operator-provided `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`; tests use an injected offline transport.
+6. A production scan evaluator remains gated on an explicitly approved, data-validated signal rule; the entrypoint intentionally has no invented default strategy.

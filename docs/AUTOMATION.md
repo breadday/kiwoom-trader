@@ -5,6 +5,7 @@
 - [x] 주문 안전성 구현 (dry-run/mock only, live order blocked)
 - [x] 스캔 자동화 (read-only provider/evaluator/sink 분리, 주문 실행 없음)
 - [x] 텔레그램 알림 (MATCH/ERROR 전용 result sink, 환경변수 자격증명)
+- [x] 스캔 실행 엔트리포인트 (환경변수 설정, paper 고정, 기본 1회 실행)
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -21,7 +22,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램 안전성 테스트 92개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 97개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -51,3 +52,18 @@
 - 메시지는 4,000자로 제한하며 초과 항목 수를 표시한다.
 - 실제 Telegram 전송은 운영 토큰과 채팅 ID가 등록된 승인 네트워크 환경에서만
   수행한다. 현재 검증은 주입한 가짜 transport를 사용해 외부 전송 없이 완료했다.
+
+## 스캔 실행 엔트리포인트
+
+- `api/scan_entrypoint.py`의 `run_scan_once(evaluator=...)`는 Kiwoom 일봉 조회,
+  `ReadOnlyMarketScanner`, `TelegramScanResultSink`를 조립해 정확히 한 주기만
+  실행한다. 스케줄러가 호출할 때 프로세스가 누적되지 않도록 기본 반복 실행은 없다.
+- API는 코드에서 `paper=True`로 고정하고 생성 결과가 paper 모드가 아니면 일봉
+  조회 전에 실패한다. 주문 함수는 호출하지 않는다.
+- 필수 환경변수: `KIWOOM_SCAN_CODES`(쉼표 구분 6자리 코드),
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- 선택 환경변수: `KIWOOM_SCAN_LIMIT`(기본 60),
+  `KIWOOM_SCAN_INTERVAL_SECONDS`(기본 300, 향후 반복 runner용).
+- 투자 신호 evaluator는 호출자가 명시적으로 주입한다. 데이터로 검증되지 않은
+  매매 규칙을 엔트리포인트가 임의로 선택하지 않으며, evaluator 미지정 시 실행할
+  수 없다.
