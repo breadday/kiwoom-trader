@@ -4,11 +4,16 @@
 모든 증권사가 동일한 인터페이스로 동작
 """
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Dict, List
 import yaml
 from .kiwoom_api import KiwoomAPI
 from .kiwoom_auth import KiwoomAuth
 from order import LiveOrderDisabledError
+
+
+class LiveBalanceDisabledError(RuntimeError):
+    """Raised when an adapter has no approved live balance implementation."""
 
 class BrokerAdapter(ABC):
     def __init__(self, config: dict):
@@ -37,6 +42,12 @@ class BrokerAdapter(ABC):
                 f"{self.broker} live order submission is disabled"
             )
 
+    def _ensure_paper_balance(self):
+        if not self.paper:
+            raise LiveBalanceDisabledError(
+                f"{self.broker} live balance retrieval is disabled"
+            )
+
 class KiwoomAdapter(BrokerAdapter):
     def __init__(self, config):
         super().__init__(config)
@@ -56,6 +67,7 @@ class KiwoomAdapter(BrokerAdapter):
             }
 
     def get_balance(self):
+        self._ensure_paper_balance()
         return self.api.get_balance()
 
     def buy_market(self, code, qty):
@@ -81,10 +93,7 @@ class NHAdapter(BrokerAdapter):
         }
 
     def get_balance(self):
-        if self.paper:
-            return self.mock
-        # TODO: 실제 NH API 연동
-        # import requests; requests.post("https://apiportal.nhqv.com/...", ...)
+        self._ensure_paper_balance()
         return self.mock
 
     def buy_market(self, code, qty):
@@ -110,7 +119,8 @@ class SamsungAdapter(BrokerAdapter):
         }
 
     def get_balance(self):
-        return self.mock if self.paper else self.mock
+        self._ensure_paper_balance()
+        return self.mock
 
     def buy_market(self, code, qty):
         self._ensure_paper_order()
@@ -133,7 +143,8 @@ class KBAdapter(BrokerAdapter):
         }
 
     def get_balance(self):
-        return self.mock if self.paper else self.mock
+        self._ensure_paper_balance()
+        return self.mock
 
     def buy_market(self, code, qty):
         self._ensure_paper_order()
@@ -149,28 +160,42 @@ class MultiAccountManager:
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 cfg = yaml.safe_load(f)
-                for acc_cfg in cfg.get('accounts', []):
-                    broker = acc_cfg['broker']
-                    if broker == 'kiwoom':
-                        adapter = KiwoomAdapter(acc_cfg)
-                    elif broker == 'nh':
-                        adapter = NHAdapter(acc_cfg)
-                    elif broker == 'samsung':
-                        adapter = SamsungAdapter(acc_cfg)
-                    elif broker == 'kb':
-                        adapter = KBAdapter(acc_cfg)
-                    else:
-                        continue
-                    self.adapters[acc_cfg['id']] = adapter
         except FileNotFoundError:
-            # 기본 4개 계좌 mock 생성
-            print("[MultiAccount] accounts.yaml 없음, 기본 4개 mock 계좌 생성")
-            self.adapters = {
-                "kiwoom_main": KiwoomAdapter({"id": "kiwoom_main", "broker": "kiwoom", "name": "키움 주계좌", "paper": True}),
-                "nh_main": NHAdapter({"id": "nh_main", "broker": "nh", "name": "NH투자", "paper": True}),
-                "samsung_main": SamsungAdapter({"id": "samsung_main", "broker": "samsung", "name": "삼성증권", "paper": True}),
-                "kb_main": KBAdapter({"id": "kb_main", "broker": "kb", "name": "KB증권", "paper": True}),
-            }
+            raise FileNotFoundError("accounts config file was not found") from None
+
+        if not isinstance(cfg, Mapping):
+            raise ValueError("accounts config must be a mapping")
+        accounts = cfg.get('accounts')
+        if not isinstance(accounts, list):
+            raise ValueError("accounts must be a list")
+
+        adapter_types = {
+            'kiwoom': KiwoomAdapter,
+            'nh': NHAdapter,
+            'samsung': SamsungAdapter,
+            'kb': KBAdapter,
+        }
+        validated = []
+        seen_ids = set()
+        for acc_cfg in accounts:
+            if not isinstance(acc_cfg, Mapping):
+                raise ValueError("each account must be a mapping")
+            account_id = acc_cfg.get('id')
+            broker = acc_cfg.get('broker')
+            paper = acc_cfg.get('paper', True)
+            if not isinstance(account_id, str) or not account_id.strip():
+                raise ValueError("account id must be a non-empty string")
+            if account_id in seen_ids:
+                raise ValueError("duplicate account id")
+            if broker not in adapter_types:
+                raise ValueError("unsupported broker")
+            if not isinstance(paper, bool):
+                raise ValueError("account paper flag must be boolean")
+            seen_ids.add(account_id)
+            validated.append((account_id, adapter_types[broker], dict(acc_cfg)))
+
+        for account_id, adapter_type, acc_cfg in validated:
+            self.adapters[account_id] = adapter_type(acc_cfg)
 
     def get_all_balances(self):
         result = []

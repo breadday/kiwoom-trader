@@ -33,8 +33,9 @@ git diff --check
 1. 기본 모드는 `paper=True`로 유지한다.
 2. `KiwoomAPI.buy_market()`와 `sell_market()`은 `paper=False`에서
    `LiveOrderDisabledError`를 발생시켜야 한다.
-3. `MultiAccountManager`와 각 broker adapter의 비-paper 주문 차단 테스트가
-   통과해야 한다.
+3. `MultiAccountManager`와 각 broker adapter의 비-paper 주문 및 live 잔고 조회
+   차단 테스트가 통과해야 한다. `accounts.yaml` 누락 시 암묵적 mock 계좌를
+   생성하지 않으며 명시적 `accounts:` 목록이 필요하다.
 4. `get_daily_chart()`는 read-only 시장데이터 경로지만 Bearer 인증이
    필요하므로, 별도 승인 전 실제 endpoint를 호출하지 않는다.
 5. 실전 전환을 위해서는 별도의 사용자 승인, 키 관리, 주문 승인 회로,

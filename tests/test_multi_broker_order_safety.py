@@ -1,6 +1,13 @@
 import unittest
+from unittest.mock import patch
 
-from api.multi_broker_api import KBAdapter, NHAdapter, SamsungAdapter
+from api.multi_broker_api import (
+    KBAdapter,
+    KiwoomAdapter,
+    LiveBalanceDisabledError,
+    NHAdapter,
+    SamsungAdapter,
+)
 from order import LiveOrderDisabledError
 
 
@@ -30,6 +37,36 @@ class MultiBrokerOrderSafetyTests(unittest.TestCase):
             with self.subTest(broker=adapter.broker):
                 self.assertEqual(adapter.buy_market("005930", 1)["status"], "filled")
                 self.assertEqual(adapter.sell_market("005930", 1)["status"], "filled")
+
+    @patch("api.kiwoom_api.requests.get")
+    def test_non_paper_balances_fail_closed_without_network_or_mock_fallback(self, get):
+        adapters = (
+            KiwoomAdapter({"id": "kiwoom", "broker": "kiwoom", "paper": False}),
+            NHAdapter({"id": "nh", "broker": "nh", "paper": False}),
+            SamsungAdapter({"id": "samsung", "broker": "samsung", "paper": False}),
+            KBAdapter({"id": "kb", "broker": "kb", "paper": False}),
+        )
+
+        for adapter in adapters:
+            with self.subTest(broker=adapter.broker):
+                with self.assertRaises(LiveBalanceDisabledError):
+                    adapter.get_balance()
+
+        get.assert_not_called()
+
+    def test_paper_balances_remain_available_as_explicit_mock_data(self):
+        adapters = (
+            KiwoomAdapter({"id": "kiwoom", "broker": "kiwoom", "paper": True}),
+            NHAdapter({"id": "nh", "broker": "nh", "paper": True}),
+            SamsungAdapter({"id": "samsung", "broker": "samsung", "paper": True}),
+            KBAdapter({"id": "kb", "broker": "kb", "paper": True}),
+        )
+
+        for adapter in adapters:
+            with self.subTest(broker=adapter.broker):
+                balance = adapter.get_balance()
+                self.assertIn("cash", balance)
+                self.assertIn("positions", balance)
 
 
 if __name__ == "__main__":

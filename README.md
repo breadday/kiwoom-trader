@@ -118,12 +118,13 @@ git push origin main
 
 1. **accounts.yaml 생성**
 ```yaml
-kiwoom:
-  app_key: "YOUR_APP_KEY"
-  app_secret: "YOUR_SECRET"
-  accounts:
-    - id: "계좌1"
-      account_no: "12345678"
+accounts:
+  - id: "kiwoom-paper"
+    name: "Kiwoom paper"
+    broker: "kiwoom"
+    paper: true
+    app_key: "YOUR_APP_KEY"
+    app_secret: "YOUR_SECRET"
 ```
 
 2. **main_real.py 실행**

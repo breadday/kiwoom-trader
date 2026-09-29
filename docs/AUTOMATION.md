@@ -9,6 +9,7 @@
 - [x] 로컬 스케줄 안전장치 (동시 실행 잠금, 제한적 Telegram 재시도)
 - [x] Kiwoom 요청 throttle (단조시계, 동시 호출 직렬화, 최소 0.21초)
 - [x] 스캔 OHLCV 유한수 검증 (NaN/Infinity fail-closed)
+- [x] 멀티 브로커 잔고 안전성 (명시적 paper 설정만 허용, live/mock 혼동 차단)
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -34,7 +35,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 117개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 124개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -103,3 +104,12 @@
   재시도하고 상태 파일 쓰기 오류·설정 오류·코드 오류는 반복하지 않는다.
 - 파일 잠금은 단일 호스트용이다. Vercel 또는 다중 인스턴스 배포에서는 외부
   distributed lock과 durable state store가 별도로 필요하다.
+
+## 멀티 브로커 잔고 안전성
+
+- Kiwoom, NH, Samsung, KB adapter의 `paper=False` 잔고 조회는
+  `LiveBalanceDisabledError`로 네트워크 또는 mock 반환 전에 차단한다.
+- `MultiAccountManager`는 `accounts.yaml`이 없을 때 암묵적 mock 계좌를 만들지
+  않는다. `accounts:` 목록을 명시해야 하며 중복 ID, 미지원 broker, 잘못된 문서
+  구조와 boolean이 아닌 `paper` 설정은 adapter 생성 전에 거부한다.
+- paper adapter의 mock 잔고는 명시적으로 `paper: true`인 경우에만 사용할 수 있다.
