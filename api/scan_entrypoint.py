@@ -6,6 +6,7 @@ Telegram result sink; it never imports or invokes an order adapter.
 """
 
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 import math
 import os
@@ -13,7 +14,12 @@ from typing import Any
 
 from api.kiwoom_api import KiwoomAPI
 from api.scanner import ReadOnlyMarketScanner, ScanConfig, ScanRunner
-from api.telegram_notifications import TelegramConfig, TelegramScanResultSink
+from api.scan_scheduling import FileRunLock, RetryingResultSink
+from api.telegram_notifications import (
+    TelegramConfig,
+    TelegramDeliveryError,
+    TelegramScanResultSink,
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +27,9 @@ class ScanRuntimeConfig:
     codes: tuple[str, ...]
     limit: int = 60
     interval_seconds: float = 300.0
+    alert_max_attempts: int = 3
+    alert_retry_seconds: float = 2.0
+    lock_file: str | None = None
 
     def __post_init__(self):
         scan_config = ScanConfig(codes=self.codes, limit=self.limit)
@@ -32,6 +41,25 @@ class ScanRuntimeConfig:
             or self.interval_seconds <= 0
         ):
             raise ValueError("scan interval must be a positive finite number")
+        if (
+            isinstance(self.alert_max_attempts, bool)
+            or not isinstance(self.alert_max_attempts, int)
+            or self.alert_max_attempts <= 0
+        ):
+            raise ValueError("alert max attempts must be a positive integer")
+        if (
+            isinstance(self.alert_retry_seconds, bool)
+            or not isinstance(self.alert_retry_seconds, (int, float))
+            or not math.isfinite(self.alert_retry_seconds)
+            or self.alert_retry_seconds < 0
+        ):
+            raise ValueError("alert retry seconds must be a non-negative finite number")
+        if self.lock_file is not None and (
+            not isinstance(self.lock_file, str)
+            or not self.lock_file.strip()
+            or "\x00" in self.lock_file
+        ):
+            raise ValueError("scan lock file has an invalid format")
 
     @classmethod
     def from_env(cls, environ=None):
@@ -49,7 +77,23 @@ class ScanRuntimeConfig:
             source.get("KIWOOM_SCAN_INTERVAL_SECONDS", "300"),
             "scan interval",
         )
-        return cls(codes=codes, limit=limit, interval_seconds=interval)
+        attempts = cls._positive_int(
+            source.get("KIWOOM_ALERT_MAX_ATTEMPTS", "3"),
+            "alert max attempts",
+        )
+        retry_seconds = cls._non_negative_float(
+            source.get("KIWOOM_ALERT_RETRY_SECONDS", "2"),
+            "alert retry seconds",
+        )
+        lock_file = source.get("KIWOOM_SCAN_LOCK_FILE")
+        return cls(
+            codes=codes,
+            limit=limit,
+            interval_seconds=interval,
+            alert_max_attempts=attempts,
+            alert_retry_seconds=retry_seconds,
+            lock_file=lock_file,
+        )
 
     @staticmethod
     def _positive_int(value, label):
@@ -71,6 +115,16 @@ class ScanRuntimeConfig:
             raise ValueError(f"{label} must be a positive finite number")
         return parsed
 
+    @staticmethod
+    def _non_negative_float(value, label):
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be a non-negative finite number") from exc
+        if isinstance(value, bool) or not math.isfinite(parsed) or parsed < 0:
+            raise ValueError(f"{label} must be a non-negative finite number")
+        return parsed
+
 
 def build_scan_runner(
     *,
@@ -78,6 +132,7 @@ def build_scan_runner(
     environ=None,
     api_factory=KiwoomAPI,
     sink_factory=TelegramScanResultSink,
+    runtime_config=None,
 ):
     """Build a paper-mode, read-only scan pipeline from validated settings."""
     if not callable(evaluator):
@@ -87,7 +142,13 @@ def build_scan_runner(
     if not callable(sink_factory):
         raise TypeError("sink_factory must be callable")
 
-    runtime = ScanRuntimeConfig.from_env(environ)
+    runtime = (
+        ScanRuntimeConfig.from_env(environ)
+        if runtime_config is None
+        else runtime_config
+    )
+    if not isinstance(runtime, ScanRuntimeConfig):
+        raise TypeError("runtime_config must be a ScanRuntimeConfig")
     telegram = TelegramConfig.from_env(environ)
     api = api_factory(paper=True)
     if getattr(api, "is_paper", None) is not True:
@@ -98,19 +159,29 @@ def build_scan_runner(
         daily_chart_provider=api.get_daily_chart,
         evaluator=evaluator,
     )
+    sink = RetryingResultSink(
+        sink_factory(telegram),
+        max_attempts=runtime.alert_max_attempts,
+        retry_seconds=runtime.alert_retry_seconds,
+        retry_exceptions=(TelegramDeliveryError,),
+    )
     return ScanRunner(
         scanner,
-        result_sink=sink_factory(telegram),
+        result_sink=sink,
         interval_seconds=runtime.interval_seconds,
     )
 
 
 def run_scan_once(*, evaluator, environ=None, api_factory=KiwoomAPI, sink_factory=TelegramScanResultSink):
     """Run exactly one configured scan cycle and publish its result batch."""
-    runner = build_scan_runner(
-        evaluator=evaluator,
-        environ=environ,
-        api_factory=api_factory,
-        sink_factory=sink_factory,
-    )
-    return runner.run(max_cycles=1)
+    runtime = ScanRuntimeConfig.from_env(environ)
+    lock = FileRunLock(runtime.lock_file) if runtime.lock_file is not None else nullcontext()
+    with lock:
+        runner = build_scan_runner(
+            evaluator=evaluator,
+            environ=environ,
+            api_factory=api_factory,
+            sink_factory=sink_factory,
+            runtime_config=runtime,
+        )
+        return runner.run(max_cycles=1)

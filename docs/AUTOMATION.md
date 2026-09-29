@@ -6,6 +6,7 @@
 - [x] 스캔 자동화 (read-only provider/evaluator/sink 분리, 주문 실행 없음)
 - [x] 텔레그램 알림 (MATCH/ERROR 전용 result sink, 환경변수 자격증명)
 - [x] 스캔 실행 엔트리포인트 (환경변수 설정, paper 고정, 기본 1회 실행)
+- [x] 로컬 스케줄 안전장치 (동시 실행 잠금, 제한적 Telegram 재시도)
 
 진행할 때마다 여기에 적고 Codex에게 시킴
 
@@ -22,7 +23,7 @@
 
 ## 현재 검증 상태
 
-- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 104개 통과.
+- 주문·전략·일봉·optimizer·privacy·스캔·텔레그램·엔트리포인트 안전성 테스트 111개 통과.
 - `paper=False` 주문은 모든 adapter에서 fail-closed 처리.
 - 저장소 로컬 `.tmp-pydeps` 경로의 `pandas`·`numpy`를 사용해 전체 unittest discovery를 통과함.
 - 실제 Kiwoom read-only API 호출과 실주문은 인증·운영 승인 전까지 실행하지 않음.
@@ -79,3 +80,15 @@
 - 투자 신호 evaluator는 호출자가 명시적으로 주입한다. 데이터로 검증되지 않은
   매매 규칙을 엔트리포인트가 임의로 선택하지 않으며, evaluator 미지정 시 실행할
   수 없다.
+
+## 로컬 스케줄 안전장치
+
+- `KIWOOM_SCAN_LOCK_FILE`을 지정하면 `run_scan_once`가 OS 비차단 파일 잠금을
+  획득한 뒤에만 API 객체를 생성한다. 권장값은 `automation/runs/scan.lock`이다.
+  동일 호스트에서 앞선 실행이 끝나지 않았으면 `ScanAlreadyRunningError`로 즉시
+  중단하며, 프로세스 종료 시 OS가 잠금을 해제하므로 stale PID 판정은 사용하지 않는다.
+- Telegram 전송은 `KIWOOM_ALERT_MAX_ATTEMPTS`(기본 3회)와
+  `KIWOOM_ALERT_RETRY_SECONDS`(기본 2초)로 제한한다. `TelegramDeliveryError`만
+  재시도하고 상태 파일 쓰기 오류·설정 오류·코드 오류는 반복하지 않는다.
+- 파일 잠금은 단일 호스트용이다. Vercel 또는 다중 인스턴스 배포에서는 외부
+  distributed lock과 durable state store가 별도로 필요하다.

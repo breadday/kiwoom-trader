@@ -1,7 +1,11 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from api.scanner import ScanItem
 from api.scan_entrypoint import ScanRuntimeConfig, build_scan_runner, run_scan_once
+from api.scan_scheduling import FileRunLock, ScanAlreadyRunningError
+from api.telegram_notifications import TelegramDeliveryError
 
 
 class FakeAPI:
@@ -57,6 +61,20 @@ class ScanRuntimeConfigTests(unittest.TestCase):
         self.assertEqual(config.limit, 120)
         self.assertEqual(config.interval_seconds, 600.0)
 
+    def test_reads_retry_and_lock_settings_from_environment(self):
+        config = ScanRuntimeConfig.from_env(
+            {
+                "KIWOOM_SCAN_CODES": "005930",
+                "KIWOOM_ALERT_MAX_ATTEMPTS": "4",
+                "KIWOOM_ALERT_RETRY_SECONDS": "1.5",
+                "KIWOOM_SCAN_LOCK_FILE": "automation/runs/scan.lock",
+            }
+        )
+
+        self.assertEqual(config.alert_max_attempts, 4)
+        self.assertEqual(config.alert_retry_seconds, 1.5)
+        self.assertEqual(config.lock_file, "automation/runs/scan.lock")
+
     def test_missing_or_malformed_environment_fails_closed(self):
         invalid_environments = (
             {},
@@ -64,6 +82,9 @@ class ScanRuntimeConfigTests(unittest.TestCase):
             {"KIWOOM_SCAN_CODES": "005930,005930"},
             {"KIWOOM_SCAN_CODES": "005930", "KIWOOM_SCAN_LIMIT": "0"},
             {"KIWOOM_SCAN_CODES": "005930", "KIWOOM_SCAN_INTERVAL_SECONDS": "nan"},
+            {"KIWOOM_SCAN_CODES": "005930", "KIWOOM_ALERT_MAX_ATTEMPTS": "0"},
+            {"KIWOOM_SCAN_CODES": "005930", "KIWOOM_ALERT_RETRY_SECONDS": "-1"},
+            {"KIWOOM_SCAN_CODES": "005930", "KIWOOM_SCAN_LOCK_FILE": ""},
         )
 
         for environ in invalid_environments:
@@ -117,6 +138,50 @@ class ScanEntrypointTests(unittest.TestCase):
 
         self.assertEqual(cycles, 1)
         self.assertEqual(len(FakeSink.instances[0].batches), 1)
+
+    def test_entrypoint_retries_only_telegram_delivery_failure(self):
+        class FlakySink(FakeSink):
+            def __call__(self, batch):
+                self.batches.append(batch)
+                if len(self.batches) == 1:
+                    raise TelegramDeliveryError("temporary")
+                return True
+
+        cycles = run_scan_once(
+            evaluator=lambda _code, _bars: (False, "no signal"),
+            environ={
+                "KIWOOM_SCAN_CODES": "005930",
+                "KIWOOM_ALERT_MAX_ATTEMPTS": "2",
+                "KIWOOM_ALERT_RETRY_SECONDS": "0",
+                "TELEGRAM_BOT_TOKEN": "123456:TEST_token",
+                "TELEGRAM_CHAT_ID": "123",
+            },
+            api_factory=FakeAPI,
+            sink_factory=FlakySink,
+        )
+
+        self.assertEqual(cycles, 1)
+        self.assertEqual(len(FlakySink.instances[-1].batches), 2)
+
+    def test_lock_conflict_blocks_before_api_construction(self):
+        with TemporaryDirectory() as directory:
+            lock_file = str(Path(directory) / "scan.lock")
+            environ = {
+                "KIWOOM_SCAN_CODES": "005930",
+                "KIWOOM_SCAN_LOCK_FILE": lock_file,
+                "TELEGRAM_BOT_TOKEN": "123456:TEST_token",
+                "TELEGRAM_CHAT_ID": "123",
+            }
+
+            with FileRunLock(lock_file), self.assertRaises(ScanAlreadyRunningError):
+                run_scan_once(
+                    evaluator=lambda _code, _bars: (False, "no signal"),
+                    environ=environ,
+                    api_factory=FakeAPI,
+                    sink_factory=FakeSink,
+                )
+
+            self.assertEqual(FakeAPI.instances, [])
 
     def test_rejects_non_paper_api_before_market_data_request(self):
         class UnsafeAPI(FakeAPI):
