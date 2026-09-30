@@ -15,6 +15,22 @@ from tests.test_strategy_engine import FakeManager, position
 
 
 class PartialExitStateConcurrencyTests(unittest.TestCase):
+    def test_duplicate_json_keys_fail_closed(self):
+        entry = '{"account_id":"paper-1","code":"005930","strategy":"RESCUE","status":"pending","status":"filled"}'
+        payloads = (
+            '{"version":2,"version":1,"entries":[]}',
+            '{"version":1,"entries":[{}],"entries":[]}',
+            '{"version":1,"entries":[' + entry + ']}',
+        )
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            for payload in payloads:
+                with self.subTest(payload=payload):
+                    path.write_text(payload, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "state file is invalid"):
+                        PartialExitStateStore(path)
+                    self.assertEqual(path.read_text(encoding="utf-8"), payload)
+
     def test_state_version_requires_supported_integer(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"

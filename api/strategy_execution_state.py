@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 
 from .scan_scheduling import FileRunLock, ScanAlreadyRunningError
+from .state_json import load_state_json
 
 
 _MAX_STATE_FILE_BYTES = 1_000_000
@@ -109,7 +110,7 @@ class PartialExitStateStore:
         try:
             if self.path.stat().st_size > _MAX_STATE_FILE_BYTES:
                 raise ValueError("partial-exit state file is too large")
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            payload = load_state_json(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return {}
         except ValueError:

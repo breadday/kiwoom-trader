@@ -24,6 +24,23 @@ class FakeResponse:
 
 
 class TelegramScanResultSinkTests(unittest.TestCase):
+    def test_duplicate_json_keys_fail_closed(self):
+        payloads = (
+            '{"version":2,"version":1,"states":{}}',
+            '{"version":1,"states":{"bad":[]},"states":{}}',
+            '{"version":1,"states":{"005930":["MATCH","signal",null,null,null],"005930":["NO_MATCH","clear",null,null,null]}}',
+        )
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            config = TelegramConfig(bot_token="123456:TEST_token", chat_id="123",
+                                    alert_state_file=str(path))
+            for payload in payloads:
+                with self.subTest(payload=payload):
+                    path.write_text(payload, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "state file is invalid"):
+                        TelegramScanResultSink(config)
+                    self.assertEqual(path.read_text(encoding="utf-8"), payload)
+
     def test_state_version_requires_supported_integer(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"

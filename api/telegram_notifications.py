@@ -14,6 +14,7 @@ from typing import Any
 
 from api.scanner import ScanItem
 from api.scan_scheduling import FileRunLock, ScanAlreadyRunningError
+from api.state_json import load_state_json
 
 
 _BOT_TOKEN_PATTERN = re.compile(r"^[0-9]+:[A-Za-z0-9_-]+$")
@@ -196,7 +197,7 @@ class TelegramScanResultSink:
         try:
             if path.stat().st_size > _MAX_STATE_FILE_BYTES:
                 raise ValueError("alert state file is too large")
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload = load_state_json(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return {}
         except ValueError:
