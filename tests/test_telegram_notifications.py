@@ -22,6 +22,34 @@ class FakeResponse:
 
 
 class TelegramScanResultSinkTests(unittest.TestCase):
+    def test_timeout_rejects_non_finite_and_invalid_values(self):
+        for timeout in (float("nan"), float("inf"), float("-inf"), 0, -1, True, "10", None):
+            with self.subTest(timeout=timeout):
+                with self.assertRaises(ValueError):
+                    TelegramConfig(
+                        bot_token="123456:TEST_token", chat_id="123",
+                        timeout_seconds=timeout,
+                    )
+
+    def test_positive_finite_timeout_reaches_transport(self):
+        for timeout in (1, 0.25):
+            with self.subTest(timeout=timeout):
+                calls = []
+
+                def transport(_url, **kwargs):
+                    calls.append(kwargs["timeout"])
+                    return FakeResponse()
+
+                sink = TelegramScanResultSink(
+                    TelegramConfig(
+                        bot_token="123456:TEST_token", chat_id="123",
+                        timeout_seconds=timeout,
+                    ),
+                    transport=transport,
+                )
+                self.assertTrue(sink([ScanItem("005930", "MATCH", True, "signal")]))
+                self.assertEqual(calls, [float(timeout)])
+
     def test_sends_only_matches_and_errors_with_bounded_plain_text(self):
         calls = []
 

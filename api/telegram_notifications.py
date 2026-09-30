@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -54,9 +55,10 @@ class TelegramConfig:
         if (
             isinstance(self.timeout_seconds, bool)
             or not isinstance(self.timeout_seconds, (int, float))
+            or not math.isfinite(self.timeout_seconds)
             or self.timeout_seconds <= 0
         ):
-            raise ValueError("timeout_seconds must be positive")
+            raise ValueError("timeout_seconds must be finite and positive")
         if self.alert_state_file is not None and (
             not isinstance(self.alert_state_file, str)
             or not self.alert_state_file.strip()
