@@ -1,4 +1,6 @@
 import errno
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -55,6 +57,52 @@ class RetryingResultSinkTests(unittest.TestCase):
 
 
 class FileRunLockTests(unittest.TestCase):
+    def test_separate_process_cannot_acquire_until_parent_releases(self):
+        script = """
+import sys
+from api.scan_scheduling import FileRunLock, ScanAlreadyRunningError
+try:
+    with FileRunLock(sys.argv[1]):
+        print("acquired")
+except ScanAlreadyRunningError:
+    print("busy")
+"""
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "scan.lock"
+
+            def probe():
+                return subprocess.run(
+                    [sys.executable, "-c", script, str(path)],
+                    cwd=Path(__file__).resolve().parents[1],
+                    capture_output=True, text=True, timeout=15, check=True,
+                ).stdout.strip()
+
+            with FileRunLock(path):
+                self.assertEqual(probe(), "busy")
+            self.assertEqual(probe(), "acquired")
+
+    def test_abrupt_process_exit_releases_os_lock(self):
+        script = """
+import os
+import sys
+from api.scan_scheduling import FileRunLock
+lock = FileRunLock(sys.argv[1])
+lock.acquire()
+print("locked", flush=True)
+os._exit(17)
+"""
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "scan.lock"
+            result = subprocess.run(
+                [sys.executable, "-c", script, str(path)],
+                cwd=Path(__file__).resolve().parents[1],
+                capture_output=True, text=True, timeout=15,
+            )
+            self.assertEqual(result.returncode, 17, result.stderr)
+            self.assertEqual(result.stdout.strip(), "locked")
+            with FileRunLock(path):
+                self.assertTrue(path.exists())
+
     def test_os_lock_errors_distinguish_contention_from_io_failure(self):
         for error_number, expected in (
             (errno.EACCES, ScanAlreadyRunningError),
