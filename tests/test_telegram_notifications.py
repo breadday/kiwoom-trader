@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from api.scan_scheduling import FileRunLock
+from api.scan_scheduling import FileRunLock, RetryingResultSink
 from api.scanner import ScanItem
 from api.telegram_notifications import (
     TelegramConfig,
@@ -24,6 +24,60 @@ class FakeResponse:
 
 
 class TelegramScanResultSinkTests(unittest.TestCase):
+    def test_post_delivery_write_failure_preserves_file_and_is_not_retried(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            config = TelegramConfig(bot_token="123456:TEST_token", chat_id="123",
+                                    alert_state_file=str(path))
+            calls = []
+
+            def transport(_url, **kwargs):
+                calls.append(kwargs)
+                return FakeResponse()
+
+            sink = TelegramScanResultSink(config, transport=transport)
+            match = ScanItem("005930", "MATCH", True, "signal")
+            sink([ScanItem("005930", "NO_MATCH", False, "clear")])
+            before = path.read_bytes()
+            retrying = RetryingResultSink(
+                sink, retry_exceptions=(TelegramDeliveryError,),
+                sleeper=lambda _seconds: self.fail("persistence failure must not retry"),
+            )
+            with patch("api.telegram_notifications.os.replace", side_effect=OSError("disk failure")):
+                with self.assertRaisesRegex(RuntimeError, "could not be written"):
+                    retrying([match])
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+            with FileRunLock(f"{path}.lock"):
+                pass
+            # Delivery succeeded but its record did not: a later restart may resend.
+            restarted = TelegramScanResultSink(config, transport=transport)
+            self.assertTrue(restarted([match]))
+            self.assertFalse(restarted([match]))
+            self.assertEqual(len(calls), 2)
+
+    def test_passive_write_failure_prevents_actionable_delivery(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            calls = []
+            sink = TelegramScanResultSink(
+                TelegramConfig(bot_token="123456:TEST_token", chat_id="123",
+                               alert_state_file=str(path)),
+                transport=lambda *args, **kwargs: calls.append(kwargs),
+            )
+            with patch("api.telegram_notifications.os.replace", side_effect=OSError("disk failure")):
+                with self.assertRaisesRegex(RuntimeError, "could not be written"):
+                    sink([
+                        ScanItem("005930", "NO_MATCH", False, "clear"),
+                        ScanItem("000660", "MATCH", True, "signal"),
+                    ])
+            self.assertEqual(calls, [])
+            self.assertFalse(path.exists())
+            self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+            self.assertFalse(sink([ScanItem("005930", "NO_MATCH", False, "clear")]))
+            self.assertTrue(path.exists())
+
     def test_duplicate_codes_rejected_without_delivery_or_state_change(self):
         for persistent in (False, True):
             with self.subTest(persistent=persistent), TemporaryDirectory() as directory:
