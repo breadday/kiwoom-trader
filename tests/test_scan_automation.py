@@ -153,6 +153,34 @@ class ReadOnlyMarketScannerTests(unittest.TestCase):
 
 
 class ScanRunnerTests(unittest.TestCase):
+    def test_invalid_interval_fails_before_scan_or_publish(self):
+        class FakeScanner:
+            def scan_once(self):
+                raise AssertionError("scan must not run")
+
+        published = []
+        for interval in (float("nan"), float("inf"), float("-inf"), 0, -1, True, "30", None):
+            with self.subTest(interval=interval):
+                with self.assertRaises(ValueError):
+                    ScanRunner(FakeScanner(), result_sink=published.append,
+                               interval_seconds=interval)
+        self.assertEqual(published, [])
+
+    def test_fractional_interval_preserves_stop_after_wait(self):
+        class FakeScanner:
+            def scan_once(self):
+                return ["result"]
+
+        published = []
+        waits = []
+        stop_event = Event()
+        stop_event.wait = lambda seconds: waits.append(seconds) or True
+        runner = ScanRunner(FakeScanner(), result_sink=published.append,
+                            interval_seconds=0.25)
+        self.assertEqual(runner.run(max_cycles=2, stop_event=stop_event), 1)
+        self.assertEqual(waits, [0.25])
+        self.assertEqual(published, [["result"]])
+
     def test_runner_publishes_bounded_cycles_without_order_execution(self):
         class FakeScanner:
             def __init__(self):

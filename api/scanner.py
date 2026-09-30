@@ -173,9 +173,10 @@ class ScanRunner:
         if (
             isinstance(interval_seconds, bool)
             or not isinstance(interval_seconds, (int, float))
+            or not math.isfinite(interval_seconds)
             or interval_seconds <= 0
         ):
-            raise ValueError("interval_seconds must be positive")
+            raise ValueError("interval_seconds must be finite and positive")
         self.scanner = scanner
         self.result_sink = result_sink
         self.interval_seconds = interval_seconds
