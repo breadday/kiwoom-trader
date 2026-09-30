@@ -15,6 +15,61 @@ from tests.test_strategy_engine import FakeManager, position
 
 
 class PartialExitStateConcurrencyTests(unittest.TestCase):
+    def test_rejected_order_release_failure_blocks_restart_until_explicit_reset(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            manager = FakeManager([position("005930", -25, qty=4)])
+            attempts = []
+
+            def reject(*args):
+                attempts.append(args)
+                return {"error": "paper rejection"}
+
+            manager.sell_stock = reject
+            engine = PerStockStrategyEngine(manager, partial_exit_state_file=str(path))
+            engine.set_strategy("005930", "RESCUE")
+            replace = os.replace
+            writes = []
+
+            def fail_release(source, destination):
+                writes.append(destination)
+                if len(writes) == 2:
+                    raise OSError("disk failure")
+                return replace(source, destination)
+
+            with patch("api.strategy_execution_state.os.replace", side_effect=fail_release):
+                with self.assertRaisesRegex(RuntimeError, "could not be written"):
+                    engine.run_single("005930", lambda _code: {})
+            self.assertEqual(attempts, [("paper-1", "005930", 2)])
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["entries"][0]["status"], "pending")
+            self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+            restarted_manager = FakeManager([position("005930", -25, qty=4)])
+            restarted = PerStockStrategyEngine(restarted_manager, partial_exit_state_file=str(path))
+            restarted.set_strategy("005930", "RESCUE")
+            self.assertFalse(restarted.run_single("005930", lambda _code: {})["should_sell"])
+            self.assertEqual(restarted_manager.sell_calls, [])
+            self.assertTrue(restarted.reset_partial_exit("paper-1", "005930"))
+            restarted.run_single("005930", lambda _code: {})
+            self.assertEqual(restarted_manager.sell_calls, [("paper-1", "005930", 2)])
+
+    def test_failed_explicit_reset_preserves_filled_state(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            manager = FakeManager([position("005930", -25, qty=4)])
+            engine = PerStockStrategyEngine(manager, partial_exit_state_file=str(path))
+            engine.set_strategy("005930", "RESCUE")
+            engine.run_single("005930", lambda _code: {})
+            before = path.read_bytes()
+            with patch("api.strategy_execution_state.os.replace", side_effect=OSError("disk failure")):
+                with self.assertRaisesRegex(RuntimeError, "could not be written"):
+                    engine.reset_partial_exit("paper-1", "005930")
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse(engine.run_single("005930", lambda _code: {})["should_sell"])
+            self.assertEqual(manager.sell_calls, [("paper-1", "005930", 2)])
+            self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+            with FileRunLock(f"{path}.lock"):
+                pass
+
     def test_reservation_replace_failure_prevents_sell_and_allows_retry(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
