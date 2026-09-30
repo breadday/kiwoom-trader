@@ -1,6 +1,7 @@
 """Local scheduling safeguards for read-only scan runs."""
 
 from collections.abc import Callable
+import errno
 import math
 import os
 from pathlib import Path
@@ -101,9 +102,14 @@ class FileRunLock:
             raise RuntimeError("scan lock file could not be opened") from None
         try:
             self._lock(handle)
-        except OSError:
-            handle.close()
-            raise ScanAlreadyRunningError("another scan process is already running") from None
+        except OSError as error:
+            try:
+                handle.close()
+            except OSError:
+                pass
+            if error.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                raise ScanAlreadyRunningError("another scan process is already running") from None
+            raise RuntimeError("scan lock could not be acquired") from None
         self._handle = handle
         return self
 

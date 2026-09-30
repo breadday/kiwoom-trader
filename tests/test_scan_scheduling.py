@@ -1,3 +1,4 @@
+import errno
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -54,6 +55,27 @@ class RetryingResultSinkTests(unittest.TestCase):
 
 
 class FileRunLockTests(unittest.TestCase):
+    def test_os_lock_errors_distinguish_contention_from_io_failure(self):
+        for error_number, expected in (
+            (errno.EACCES, ScanAlreadyRunningError),
+            (errno.EAGAIN, ScanAlreadyRunningError),
+            (errno.EBADF, RuntimeError),
+            (errno.EIO, RuntimeError),
+        ):
+            with self.subTest(error_number=error_number), TemporaryDirectory() as directory:
+                lock = FileRunLock(Path(directory) / "scan.lock")
+                handle = Mock()
+                handle.tell.return_value = 1
+                with patch.object(Path, "open", return_value=handle), patch.object(
+                    FileRunLock, "_lock", side_effect=OSError(error_number, "failure")
+                ):
+                    with self.assertRaises(expected) as caught:
+                        lock.acquire()
+                    self.assertIs(type(caught.exception), expected)
+                    handle.close.assert_called_once_with()
+                with lock:
+                    self.assertTrue(lock.path.exists())
+
     def test_initialization_io_failure_closes_handle_and_allows_retry(self):
         for operation in ("seek", "tell", "write", "flush"):
             with self.subTest(operation=operation), TemporaryDirectory() as directory:
