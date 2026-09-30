@@ -24,8 +24,7 @@ Windows:
 python -m venv .venv
 .venv\\Scripts\\activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install pytest
+python -m pip install -r requirements-dev.txt
 ```
 
 macOS/Linux/WSL:
@@ -34,8 +33,7 @@ macOS/Linux/WSL:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install pytest
+python -m pip install -r requirements-dev.txt
 ```
 
 ## 3. 테스트

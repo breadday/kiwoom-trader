@@ -1,12 +1,12 @@
 # Kiwoom Trader - 4개 전략 시스템 (현행화 문서)
-> 최종 업데이트: 2026-05-13 / 상태: 계좌정보 없이 개발 100% 완료
+> 최종 업데이트: 2026-10-01 / 상태: 오프라인·paper 안전성 검증 완료, 외부 운영 게이트 대기
 
 ## 1. 프로젝트 개요
 키움 REST API 기반 종목별 전략 자동매매 시스템. 8종목(-945만원 손실) 구조조정 및 신규 매매를 위해 4개 전략을 종목별로 다르게 적용.
 
-**작업 경로:** `G:\내 드라이브\workspace\kiwoom-trader`
-**Git:** main 브랜치 푸시 완료
-**Python:** 3.12.10 64-bit (.venv)
+**작업 경로:** 저장소를 clone한 디렉터리(절대경로 비의존)
+**Git:** `origin/main`과 동기화
+**Python:** 프로젝트별 `.venv` 사용
 
 ---
 
@@ -85,13 +85,12 @@ engine.set_strategies_bulk({
 
 ### 4.1 가상환경
 ```powershell
-# VS Code에서 선택
-Python 3.12.10 64-bit
-# 경로는 반드시 따옴표로 감싸기
-cd "G:\내 드라이브\workspace\kiwoom-trader"
+# VS Code에서 저장소별 .venv 선택
+cd <repository-root>
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install pyyaml pandas numpy
+python -m pip install -r requirements-dev.txt
 ```
 
 ### 4.2 검증 명령어
@@ -112,9 +111,10 @@ git push origin main
 
 ---
 
-## 5. 남은 작업 (계좌정보 필요)
+## 5. 남은 작업 (외부 인증·승인 필요)
 
-> 아래는 계좌정보 없이 하면 안 되는 작업. 다른 PC/서버에서 진행
+> 아래 항목은 승인된 인증·운영 환경이 준비되기 전까지 실행하지 않는다.
+> 상세 내용과 재개 조건은 `docs/UNRESOLVED.md`를 참고한다.
 
 1. **accounts.yaml 생성**
 ```yaml

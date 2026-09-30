@@ -15,8 +15,7 @@ git clone https://github.com/breadday/kiwoom-trader.git
 cd kiwoom-trader
 python -m venv .venv
 .venv\\Scripts\\activate
-python -m pip install -r requirements.txt
-python -m pip install pytest
+python -m pip install -r requirements-dev.txt
 ```
 
 ## 설정
