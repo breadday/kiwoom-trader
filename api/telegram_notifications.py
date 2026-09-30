@@ -291,6 +291,7 @@ class TelegramScanResultSink:
         if isinstance(batch, (str, bytes)) or not isinstance(batch, Sequence):
             raise TypeError("batch must be a sequence of ScanItem values")
         items = list(batch)
+        seen_codes = set()
         for item in items:
             if not isinstance(item, ScanItem):
                 raise TypeError("batch must contain only ScanItem values")
@@ -309,6 +310,9 @@ class TelegramScanResultSink:
                 or not cls._valid_fingerprint(cls._state_fingerprint(item))
             ):
                 raise ValueError("ScanItem has invalid state fields")
+            if item.code in seen_codes:
+                raise ValueError("ScanItem codes must be unique within a batch")
+            seen_codes.add(item.code)
         return items
 
     @classmethod

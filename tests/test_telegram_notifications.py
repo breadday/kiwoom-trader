@@ -24,6 +24,37 @@ class FakeResponse:
 
 
 class TelegramScanResultSinkTests(unittest.TestCase):
+    def test_duplicate_codes_rejected_without_delivery_or_state_change(self):
+        for persistent in (False, True):
+            with self.subTest(persistent=persistent), TemporaryDirectory() as directory:
+                path = Path(directory) / "state.json"
+                calls = []
+
+                def transport(_url, **kwargs):
+                    calls.append(kwargs)
+                    return FakeResponse()
+
+                sink = TelegramScanResultSink(
+                    TelegramConfig(bot_token="123456:TEST_token", chat_id="123",
+                                   alert_state_file=str(path) if persistent else None),
+                    transport=transport,
+                )
+                match = ScanItem("005930", "MATCH", True, "signal")
+                self.assertTrue(sink([match]))
+                before = path.read_bytes() if persistent else None
+                for duplicate in (
+                    match,
+                    ScanItem("005930", "NO_MATCH", False, "cleared"),
+                    ScanItem("005930", "ERROR", False, "unavailable"),
+                ):
+                    with self.subTest(duplicate=duplicate):
+                        with self.assertRaisesRegex(ValueError, "unique"):
+                            sink([match, duplicate])
+                        self.assertEqual(len(calls), 1)
+                        if persistent:
+                            self.assertEqual(path.read_bytes(), before)
+                        self.assertFalse(sink([match]))
+
     def test_lock_io_failure_stops_before_delivery_or_state_write(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
