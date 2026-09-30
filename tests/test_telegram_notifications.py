@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -22,6 +23,71 @@ class FakeResponse:
 
 
 class TelegramScanResultSinkTests(unittest.TestCase):
+    def test_invalid_state_fields_fail_before_delivery_or_persistence(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            calls = []
+            sink = TelegramScanResultSink(
+                TelegramConfig(bot_token="123456:TEST_token", chat_id="123",
+                               alert_state_file=str(path)),
+                transport=lambda *args, **kwargs: calls.append(kwargs),
+            )
+            for item in (
+                ScanItem("bad", "MATCH", True, "signal"),
+                ScanItem("005930", "MATCH", True, "signal", "20260230"),
+                ScanItem("005930", "MATCH", True, "signal", latest_close=float("nan")),
+                ScanItem("005930", "NO_MATCH", False, "clear", latest_volume=-1),
+            ):
+                with self.subTest(item=item):
+                    with self.assertRaises(ValueError):
+                        sink([item])
+                    self.assertFalse(path.exists())
+            self.assertEqual(calls, [])
+
+    def test_zero_volume_and_missing_market_fields_survive_restart(self):
+        with TemporaryDirectory() as directory:
+            config = TelegramConfig(
+                bot_token="123456:TEST_token", chat_id="123",
+                alert_state_file=str(Path(directory) / "state.json"),
+            )
+            calls = []
+
+            def transport(_url, **kwargs):
+                calls.append(kwargs)
+                return FakeResponse()
+
+            batch = [
+                ScanItem("005930", "MATCH", True, "signal", "20260228", 100, 0),
+                ScanItem("000660", "ERROR", False, "unavailable"),
+            ]
+            self.assertTrue(TelegramScanResultSink(config, transport=transport)(batch))
+            self.assertFalse(TelegramScanResultSink(config, transport=transport)(batch))
+            self.assertEqual(len(calls), 1)
+
+    def test_invalid_persisted_fingerprint_is_rejected(self):
+        fingerprints = [
+            [[], "signal", None, None, None],
+            ["MATCH", "signal", "20260230", 100, 10],
+            ["MATCH", "signal", None, float("nan"), 10],
+            ["MATCH", "signal", None, float("inf"), 10],
+            ["MATCH", "signal", None, True, 10],
+            ["MATCH", "signal", None, 0, 10],
+            ["MATCH", "signal", None, 100, -1],
+            ["MATCH", "signal", None, 100, "10"],
+        ]
+        with TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            for fingerprint in fingerprints:
+                with self.subTest(fingerprint=fingerprint):
+                    state_file.write_text(json.dumps({
+                        "version": 1, "states": {"005930": fingerprint},
+                    }), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "alert state file"):
+                        TelegramScanResultSink(TelegramConfig(
+                            bot_token="123456:TEST_token", chat_id="123",
+                            alert_state_file=str(state_file),
+                        ))
+
     def test_timeout_rejects_non_finite_and_invalid_values(self):
         for timeout in (float("nan"), float("inf"), float("-inf"), 0, -1, True, "10", None):
             with self.subTest(timeout=timeout):

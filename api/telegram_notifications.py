@@ -3,6 +3,7 @@
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime
 import json
 import math
 import os
@@ -222,13 +223,33 @@ class TelegramScanResultSink:
 
     @staticmethod
     def _valid_fingerprint(value):
-        return (
+        if not (
             isinstance(value, list)
             and len(value) == 5
+            and isinstance(value[0], str)
             and value[0] in {"MATCH", "NO_MATCH", "ERROR"}
             and isinstance(value[1], str)
             and bool(value[1].strip())
-        )
+        ):
+            return False
+        date = value[2]
+        if date is not None:
+            if not isinstance(date, str) or not re.fullmatch(r"[0-9]{8}", date):
+                return False
+            try:
+                datetime.strptime(date, "%Y%m%d")
+            except ValueError:
+                return False
+        for number, allow_zero in ((value[3], False), (value[4], True)):
+            if number is None:
+                continue
+            if isinstance(number, bool) or not isinstance(number, (int, float)):
+                return False
+            if isinstance(number, float) and not math.isfinite(number):
+                return False
+            if number < 0 or (number == 0 and not allow_zero):
+                return False
+        return True
 
     def _persist_states(self):
         if self.config.alert_state_file is None:
@@ -265,15 +286,15 @@ class TelegramScanResultSink:
                 except OSError:
                     pass
 
-    @staticmethod
-    def _validate_batch(batch):
+    @classmethod
+    def _validate_batch(cls, batch):
         if isinstance(batch, (str, bytes)) or not isinstance(batch, Sequence):
             raise TypeError("batch must be a sequence of ScanItem values")
         items = list(batch)
         for item in items:
             if not isinstance(item, ScanItem):
                 raise TypeError("batch must contain only ScanItem values")
-            if item.status not in {"MATCH", "NO_MATCH", "ERROR"}:
+            if not isinstance(item.status, str) or item.status not in {"MATCH", "NO_MATCH", "ERROR"}:
                 raise ValueError("ScanItem has an unsupported status")
             if not isinstance(item.reason, str) or not item.reason.strip():
                 raise ValueError("ScanItem reason must be non-empty")
@@ -281,6 +302,13 @@ class TelegramScanResultSink:
                 raise ValueError("ScanItem matched must be boolean")
             if (item.status == "MATCH") is not item.matched:
                 raise ValueError("ScanItem status and matched flag are inconsistent")
+            if (
+                not isinstance(item.code, str)
+                or len(item.code) != 6
+                or not item.code.isdigit()
+                or not cls._valid_fingerprint(cls._state_fingerprint(item))
+            ):
+                raise ValueError("ScanItem has invalid state fields")
         return items
 
     @classmethod
