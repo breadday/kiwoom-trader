@@ -11,9 +11,12 @@
 
 ## 설치
 ```bash
-git clone https://github.com/YOUR_USERNAME/kiwoom-factor-swing-bot.git
-cd kiwoom-factor-swing-bot
-pip install -r requirements.txt
+git clone https://github.com/breadday/kiwoom-trader.git
+cd kiwoom-trader
+python -m venv .venv
+.venv\\Scripts\\activate
+python -m pip install -r requirements.txt
+python -m pip install pytest
 ```
 
 ## 설정
