@@ -206,6 +206,7 @@ class TelegramScanResultSink:
 
         if (
             not isinstance(payload, Mapping)
+            or type(payload.get("version")) is not int
             or payload.get("version") != 1
             or not isinstance(payload.get("states"), Mapping)
         ):

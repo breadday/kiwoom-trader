@@ -24,6 +24,19 @@ class FakeResponse:
 
 
 class TelegramScanResultSinkTests(unittest.TestCase):
+    def test_state_version_requires_supported_integer(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            config = TelegramConfig(bot_token="123456:TEST_token", chat_id="123",
+                                    alert_state_file=str(path))
+            for version in (True, False, 1.0, "1", None, 0, 2):
+                with self.subTest(version=version):
+                    path.write_text(json.dumps({"version": version, "states": {}}), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "state file is invalid"):
+                        TelegramScanResultSink(config)
+            path.write_text(json.dumps({"version": 1, "states": {}}), encoding="utf-8")
+            self.assertFalse(TelegramScanResultSink(config)([]))
+
     def test_post_delivery_write_failure_preserves_file_and_is_not_retried(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"

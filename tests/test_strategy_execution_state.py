@@ -15,6 +15,17 @@ from tests.test_strategy_engine import FakeManager, position
 
 
 class PartialExitStateConcurrencyTests(unittest.TestCase):
+    def test_state_version_requires_supported_integer(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            for version in (True, False, 1.0, "1", None, 0, 2):
+                with self.subTest(version=version):
+                    path.write_text(json.dumps({"version": version, "entries": []}), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "state file is invalid"):
+                        PartialExitStateStore(path)
+            path.write_text(json.dumps({"version": 1, "entries": []}), encoding="utf-8")
+            self.assertFalse(PartialExitStateStore(path).contains("paper-1", "005930", "RESCUE"))
+
     def test_rejected_order_release_failure_blocks_restart_until_explicit_reset(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
