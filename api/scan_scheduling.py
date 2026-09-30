@@ -83,6 +83,7 @@ class FileRunLock:
     def acquire(self):
         if self._handle is not None:
             raise RuntimeError("scan lock is already held by this instance")
+        handle = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             handle = self.path.open("a+b")
@@ -92,6 +93,11 @@ class FileRunLock:
                 handle.flush()
             handle.seek(0)
         except OSError:
+            if handle is not None:
+                try:
+                    handle.close()
+                except OSError:
+                    pass
             raise RuntimeError("scan lock file could not be opened") from None
         try:
             self._lock(handle)

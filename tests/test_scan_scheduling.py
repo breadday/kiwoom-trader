@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 from api.scan_scheduling import (
     FileRunLock,
@@ -53,6 +54,23 @@ class RetryingResultSinkTests(unittest.TestCase):
 
 
 class FileRunLockTests(unittest.TestCase):
+    def test_initialization_io_failure_closes_handle_and_allows_retry(self):
+        for operation in ("seek", "tell", "write", "flush"):
+            with self.subTest(operation=operation), TemporaryDirectory() as directory:
+                lock = FileRunLock(Path(directory) / "scan.lock")
+                handle = Mock()
+                handle.tell.return_value = 0
+                getattr(handle, operation).side_effect = OSError("disk failure")
+                with patch.object(Path, "open", return_value=handle), patch.object(
+                    FileRunLock, "_lock"
+                ) as acquire_os_lock:
+                    with self.assertRaisesRegex(RuntimeError, "could not be opened"):
+                        lock.acquire()
+                    handle.close.assert_called_once_with()
+                    acquire_os_lock.assert_not_called()
+                with lock:
+                    self.assertTrue(lock.path.exists())
+
     def test_second_holder_is_rejected_until_first_releases(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "scan.lock"
