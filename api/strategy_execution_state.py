@@ -86,7 +86,7 @@ class PartialExitStateStore:
             ) from None
         except RuntimeError:
             raise RuntimeError(
-                "partial-exit state lock file could not be opened"
+                "partial-exit state lock could not be acquired"
             ) from None
         try:
             self._entries = self._load()

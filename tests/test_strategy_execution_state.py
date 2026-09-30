@@ -1,6 +1,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from api.scan_scheduling import FileRunLock
 from api.strategy_engine import PerStockStrategyEngine
@@ -12,6 +13,20 @@ from tests.test_strategy_engine import FakeManager, position
 
 
 class PartialExitStateConcurrencyTests(unittest.TestCase):
+    def test_lock_io_failure_stops_before_provider_or_sell(self):
+        with TemporaryDirectory() as directory:
+            state_file = str(Path(directory) / "partial-exits.json")
+            manager = FakeManager([position("005930", -25, qty=4)])
+            engine = PerStockStrategyEngine(manager, partial_exit_state_file=state_file)
+            engine.set_strategy("005930", "RESCUE")
+            provider_calls = []
+            with patch.object(FileRunLock, "acquire", side_effect=RuntimeError("I/O failure")):
+                with self.assertRaisesRegex(RuntimeError, "lock could not be acquired"):
+                    engine.run_single("005930", lambda code: provider_calls.append(code) or {})
+            self.assertEqual(provider_calls, [])
+            self.assertEqual(manager.sell_calls, [])
+            self.assertFalse(Path(state_file).exists())
+
     def test_stale_store_reloads_before_reserving_same_position(self):
         with TemporaryDirectory() as directory:
             state_file = str(Path(directory) / "partial-exits.json")

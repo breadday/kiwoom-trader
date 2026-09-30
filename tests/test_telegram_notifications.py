@@ -2,6 +2,7 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from api.scan_scheduling import FileRunLock
 from api.scanner import ScanItem
@@ -23,6 +24,21 @@ class FakeResponse:
 
 
 class TelegramScanResultSinkTests(unittest.TestCase):
+    def test_lock_io_failure_stops_before_delivery_or_state_write(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            calls = []
+            sink = TelegramScanResultSink(
+                TelegramConfig(bot_token="123456:TEST_token", chat_id="123",
+                               alert_state_file=str(path)),
+                transport=lambda *args, **kwargs: calls.append(kwargs),
+            )
+            with patch.object(FileRunLock, "acquire", side_effect=RuntimeError("I/O failure")):
+                with self.assertRaisesRegex(RuntimeError, "lock could not be acquired"):
+                    sink([ScanItem("005930", "MATCH", True, "signal")])
+            self.assertEqual(calls, [])
+            self.assertFalse(path.exists())
+
     def test_invalid_state_fields_fail_before_delivery_or_persistence(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"

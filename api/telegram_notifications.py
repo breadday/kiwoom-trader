@@ -171,7 +171,7 @@ class TelegramScanResultSink:
                 "alert state is being updated by another process"
             ) from None
         except RuntimeError:
-            raise RuntimeError("alert state lock file could not be opened") from None
+            raise RuntimeError("alert state lock could not be acquired") from None
         try:
             self._last_states = self._load_states(state_file)
             yield
