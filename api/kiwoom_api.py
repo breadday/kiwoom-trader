@@ -141,6 +141,9 @@ class KiwoomAPI:
             for row in rows:
                 if not isinstance(row, dict):
                     raise RuntimeError(f"Invalid Kiwoom daily chart row: {row!r}")
+                required_fields = ("dt", "open_pric", "high_pric", "low_pric", "cur_prc", "trde_qty")
+                if all(row.get(field) is None or not str(row.get(field)).strip() for field in required_fields):
+                    continue
                 try:
                     date = str(row["dt"])
                     if len(date) != 8 or not date.isdigit():

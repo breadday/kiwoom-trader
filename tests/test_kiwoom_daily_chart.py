@@ -98,6 +98,21 @@ class KiwoomDailyChartTests(unittest.TestCase):
             self.make_api().get_daily_chart("005930")
 
     @patch("api.kiwoom_api.requests.post")
+    def test_ignores_fully_blank_placeholder_rows(self, post):
+        post.return_value = FakeResponse({"return_code": 0, "stk_dt_pole_chart_qry": [
+            {"dt": "20260925", "open_pric": "100", "high_pric": "110",
+             "low_pric": "90", "cur_prc": "105", "trde_qty": "1234"},
+            {"cur_prc": "", "trde_qty": "", "trde_prica": "", "dt": "",
+             "open_pric": "", "high_pric": "", "low_pric": "",
+             "pred_pre": "", "pred_pre_sig": "", "trde_tern_rt": "",
+             "upd_stkpc_tp": "", "upd_rt": ""},
+        ]})
+
+        result = self.make_api().get_daily_chart("005930")
+
+        self.assertEqual([bar["date"] for bar in result], ["20260925"])
+
+    @patch("api.kiwoom_api.requests.post")
     def test_limits_results_to_latest_requested_number_of_days(self, post):
         post.return_value = FakeResponse({"return_code": 0, "stk_dt_pole_chart_qry": [
             {"dt": "20260925", "open_pric": "3", "high_pric": "3", "low_pric": "3", "cur_prc": "3", "trde_qty": "30"},
