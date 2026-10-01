@@ -30,15 +30,12 @@
 
 ## 3. Telegram 운영 전송
 
-- 상태: 보류 / runtime 전송 실행 경로 미확인
-- 이유: Production env 등록은 확인했지만 Vercel CLI의 `env pull`/`env run`은 secret 값을 `[SENSITIVE]` placeholder로만 제공한다. 로컬 프로세스에는 실제 환경변수가 없으므로 이 세션에서 실제 전송을 시작할 수 없다.
-- 완료된 안전 검증: fake transport 기반 Telegram 테스트 40개 및 53개 subtests 통과; MATCH/ERROR만 전송하고 NO_MATCH는 네트워크를 호출하지 않으며, 실패 시 토큰/응답 본문을 노출하지 않는다.
+- 상태: 완료
+- 결과: 로컬 ignored env에서 secret을 런타임에만 주입하고 Telegram API 인증 및 configured chat 대상 전송을 확인했다. MATCH 1건과 ERROR 1건이 각각 `True`로 반환되었다.
+- 제한: Telegram `getUpdates`에는 최근 chat update가 없어 수신 메시지 read-back은 수행하지 못했다. API의 `sendMessage` 성공 응답은 확인했다.
+- 안전 검증: fake transport 기반 Telegram 테스트 40개 및 53개 subtests 통과; MATCH/ERROR만 전송하고 NO_MATCH는 네트워크를 호출하지 않으며, 실패 시 토큰/응답 본문을 노출하지 않는다.
 - 주문 비연결 검증: scan entrypoint/scanner/Telegram sink의 AST에 order/broker import와 `buy_market`/`sell_market`/`submit_order` 호출이 없고, 관련 안전 테스트가 통과했다.
-- 재개 조건:
-  1. operator가 값을 채팅에 보내지 않고 로컬 ignored env로 주입하거나, 인증된 Vercel runtime 검증 경로를 별도로 승인한다.
-  2. 토큰을 문서, 커밋, 로그, 오류 메시지에 남기지 않는다.
-  3. 먼저 MATCH와 ERROR 각각 실제 Telegram 수신을 확인한다.
-  4. 실제 전송은 결과 sink에 한정하고 주문 실행 경로는 계속 연결하지 않는다.
+- 운영 주의: 토큰은 문서, 커밋, 로그, 오류 메시지에 남기지 않으며 `.env.local`은 ignored 상태를 유지한다.
 
 ## 4. ORB/BULL_FLAG 실데이터 최적화 및 portfolio recommender
 

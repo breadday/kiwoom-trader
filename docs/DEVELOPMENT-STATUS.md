@@ -55,7 +55,7 @@
 2. STEP 08E paper read-only Kiwoom smoke test passed against `mockapi.kiwoom.com`; real endpoint/account validation remains disabled pending separate approval.
 3. T8 entrypoint and deployment safety guide are implemented; paper-only Vercel production deployment and endpoint read-back are complete. Live-account transition remains disabled.
 4. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.
-5. Live Telegram delivery remains gated because the linked Vercel Production env read-back currently exposes no `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`; tests use an injected offline transport. The paper-only Vercel deployment and read-back are complete.
+5. Telegram Production variables are registered; local secret-safe runtime verification delivered one MATCH and one ERROR through Telegram successfully. The paper-only Vercel deployment and read-back are complete.
 6. A production scan evaluator remains gated on an explicitly approved, data-validated signal rule; the entrypoint intentionally has no invented default strategy.
 7. Local processes can serialize duplicate-alert state with `KIWOOM_ALERT_STATE_FILE`; serverless/multi-instance deployment still requires an external durable store with concurrency control.
 8. `KIWOOM_SCAN_LOCK_FILE` prevents overlapping runs on one host only; multi-instance deployment requires a distributed lock.
