@@ -29,7 +29,7 @@
 
 ## Verification
 
-- Full discovery passes 149 tests with CPython 3.14.7 and the matching repository-local `.tmp-pydeps`; no external package installation was performed.
+- Full discovery passes 177 tests with 121 subtests using the repository-local `.venv`; no credential values are printed or committed.
 - The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
 - Scan automation isolates provider/evaluator failures per symbol, validates daily bars before evaluation, and publishes result batches only through an injected sink.
 - Request-throttle tests verify immediate first use, minimum-interval waits, backward-clock safety, invalid configuration rejection, concurrent-call serialization, and throttling before live balance network access.

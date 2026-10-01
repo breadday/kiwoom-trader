@@ -18,15 +18,12 @@
 
 ## 2. Vercel production 배포
 
-- 상태: 완료 / Telegram runtime 전송 검증은 별도 보류
+- 상태: 완료 / Telegram runtime 전송도 완료
 - 결과: deployment `dpl_E1ahxTWJDjHavnU7xhLhPAss5JwM`이 `READY` 상태로 production에 반영되었다.
 - read-back: `https://kiwoom-trader.vercel.app/` 및 `/api/index.py`가 모두 `{"ok": true, "mode": "paper", "readonly": true}`를 반환했다.
 - 현재 준비: Vercel production env 목록에서 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 등록을 확인했다.
 - 안전 범위: 현재 entrypoint는 paper-only이며 live 주문 전환을 허용하지 않는다.
-- 재개 조건:
-  1. Vercel runtime에서 고정된 검증 경로를 실행하거나, operator가 로컬 ignored env에 두 값을 주입한다(값은 채팅/로그/저장소에 남기지 않는다).
-  2. 실제 MATCH와 ERROR를 각각 한 번 전송하고 Telegram 수신 여부를 operator가 확인한다.
-  3. 전송 전후 `vercel env ls production`에서 이름만 read-back하고, 토큰 값은 출력하지 않는다.
+- 확인: Production env 이름 read-back, 로컬 ignored env runtime 주입, MATCH/ERROR API 성공 응답을 모두 확인했다.
 
 ## 3. Telegram 운영 전송
 
