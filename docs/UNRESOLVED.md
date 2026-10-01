@@ -49,6 +49,17 @@
 - 정책: 승인된 유니버스가 모두 채워지지 않은 상태에서 종목을 제외하거나 합성 데이터를 넣지 않는다.
 - 재개 조건: 해당 종목의 유효한 일봉 데이터가 모의 API에 제공되거나, 운영자가 새로운 승인 유니버스와 데이터 계약을 지정한다.
 
+## 6. Gate 0 rewritten-ref publication
+
+- 상태: 안전한 preflight에서 중단 / 원격 write 없음
+- 결과: `automation/guarded-history-push.ps1` dry-run이 expected rewritten commit `b54e785bc1c9d65f1d034ae6d3f55b1ae199c4c1`를 현재 checkout에서 찾지 못해 중단했다.
+- 추가 관측: 현재 원격 heads도 문서의 2026-09-27 old-SHA snapshot과 달라졌다(`main`은 현재 작업 커밋, STEP 07은 `c2d7bad...`). 따라서 기존 seven-ref mapping을 추정해 force-push하지 않는다.
+- 안전 범위: 원격 ref/tag는 변경하지 않았다. 일반 main 작업과 Telegram/배포 상태는 보존된다.
+- 재개 조건:
+  1. 원래 filtered mirror 또는 새로 재생성한 verified rewrite bundle에서 다섯 filtered target commit과 최종 STEP 07F commit을 확보한다.
+  2. 정확한 대상 ref와 old-SHA snapshot을 현재 GitHub에서 다시 승인·고정한다.
+  3. 별도 명시 승인 후 guarded script의 `-Execute -ConfirmRewrite`를 실행하고 seven-ref post-push SHA를 read-back한다.
+
 ## 확인 명령
 
 외부 조건이 준비되기 전까지는 다음 오프라인 검증을 반복한다.
