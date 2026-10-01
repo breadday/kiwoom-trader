@@ -25,14 +25,15 @@
   - 파일: artifact - vs + strategy_optimizer_dashboard
   - 완료조건: split 뷰, 현재 -44% vs 최적 -15% 개선 표시
 
-- [ ] T7: 실제 키움 일봉 연동 백테스트
+- [ ] T7: 실제 키움 일봉 연동 백테스트 (부분 완료)
   - 파일: /api/kiwoom_api.py, /api/strategy_optimizer.py, /docs/AUTOMATION-STEP-07*.md
   - 완료조건: 읽기 전용 일봉 조회를 최적화 계산에 연결하고, 확정된 전략/데이터 계약으로 검증
-  - 진행: STEP 07A~07F 구현·검증 및 독립 리뷰 완료. STEP 08A~08D의 공식 계약 조사, fixture 페이지네이션 회귀, provider 경계, 성과지표 검증을 완료했다. STEP 08E 오프라인 smoke와 Vercel paper-only entrypoint 회귀를 포함한 전체 discovery 81개 및 compileall이 CPython 3.14.7과 일치하는 `.tmp-pydeps` 환경에서 통과했다. 세부 결과는 `docs/AUTOMATION-STEP-08{A,B,C,D,E}-RESULTS.md` 참조.
-  - 남음: 최종 STEP 07F/handoff HEAD를 GitHub의 rewritten `main` 및 stage refs에 atomic `--force-with-lease`로 반영하고 전체 ref SHA를 readback해야 한다. `docs/AUTOMATION-STEP-08E-{PLAN,TEST,RESULTS}.md`에 실제 smoke test의 승인 조건과 현재 차단 근거를 기록했다. 현재 container GitHub 인증/네트워크와 승인된 Kiwoom read-only 실행 환경이 없어 원격 publication/read-only smoke test는 미완료다. ORB/BULL_FLAG 및 portfolio recommender 계약은 fail-closed. Force-push로 다른 clone/fork/cache/server object의 물리 삭제를 보장하지 않는다.
+  - 진행: 모의투자 `ka10081` read-only smoke, 실제 일봉 기반 RESCUE 최적화, FACTOR 데이터 연결과 CI 검증을 완료했다. 세부 결과는 `docs/AUTOMATION-STEP-08E-RESULTS.md`와 `docs/REAL-DATA-BACKTEST-RESULTS.md` 참조.
+  - 남음: FACTOR 승인 유니버스의 `061220`, `416770`은 현재 모의 API에서 종목정보와 일봉이 빈 응답이라 전체 백테스트가 fail-closed로 중단된다. ORB/BULL_FLAG 및 portfolio recommender 계약은 fail-closed.
 
-- [ ] T8: Vercel 배포 + accounts.yaml 실전 전환 가이드
+- [ ] T8: Vercel paper 배포 + accounts.yaml 실전 전환 가이드 (paper 배포 완료)
   - 파일: /api/index.py, /vercel.json, /docs/deployment.md
   - 진행: paper-only Vercel Python entrypoint와 secret 환경변수 주입, 안전 가이드 및 회귀 테스트 구현 완료.
-  - 남음: Vercel CLI 네트워크/인증, 프로젝트 연결, secret 등록이 준비되지 않아 실제 배포와 로그 검증은 미완료. 실전 전환은 별도 승인 전 금지.
+  - 진행: `https://kiwoom-trader.vercel.app`에 paper-only production 배포와 응답 read-back을 완료했다.
+  - 남음: 실전 전환은 별도 승인 전 금지. accounts.yaml 실계좌 연결과 live 주문은 지원하지 않는다.
   - 완료조건: paper=False 전환 시 안전 체크리스트
