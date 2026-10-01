@@ -14,3 +14,6 @@ automation/runs/
 .venv/
 .uv-cache/
 .npm-cache/
+
+# kiwoomcli exported credentials (do not commit)
+/kiwoom_키움 모의투자.env

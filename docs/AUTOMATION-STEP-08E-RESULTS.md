@@ -2,10 +2,10 @@
 
 ## 상태
 
-- 상태: `LOCAL_SMOKE_PASS_EXTERNAL_BLOCKED`
-- 기준일: 2026-09-28
-- 계좌·주문·인증 파일: 접근하지 않음
-- 실제 Kiwoom endpoint: 호출하지 않음
+- 상태: `READ_ONLY_SMOKE_PASS_PAPER`
+- 기준일: 2026-10-01
+- 계좌·주문 데이터: 접근하지 않음
+- 실제 Kiwoom endpoint: 모의투자 read-only 일봉 조회 1회 성공
 
 ## 완료된 사전 검증
 
@@ -17,19 +17,21 @@
 - `git diff --check` 통과
 - `get_daily_chart()`의 URL, `ka10081`, continuation, normalization 경계는
   fixture 테스트로 검증됨
+- 키움 CLI가 내보낸 모의투자 자격증명을 메모리에만 주입하고
+  `https://mockapi.kiwoom.com`의 `005930` 일봉을 실제 조회함
+- 실제 smoke 결과: 토큰 발급 성공, 5개 행, `20260922`~`20260930`
+- 재현 명령은 `automation/kiwoom_readonly_smoke.py`에 기록함
 
-## 차단 근거
+## 아직 남은 검증 범위
 
-1. 승인된 read-only Kiwoom credential/network 실행 환경이 제공되지 않았다.
+1. 운영(real) endpoint와 실계좌 인증은 실행하지 않는다.
 2. repository-local `.tmp-pydeps`의 NumPy/Pandas native wheel이 CPython 3.14용이고
    현재 실행기는 Python 3.11이어서 전체 privacy discovery가 import 실패한다.
-3. Python 3.11용 dependency 설치는 외부 PyPI 네트워크 차단으로 완료하지 못했다.
-4. 현재 컨테이너의 GitHub HTTPS 연결도 `github.com:443`에서 실패해 원격
-   publication readback을 완료할 수 없다.
-5. 실제 page size, rate limit, 휴장일, 정렬, 가격 부호, 수정주가 의미는
+3. Python 3.11용 dependency 설치는 현재 프로젝트 venv와 CI에서 완료했다.
+4. 실제 page size, rate limit, 휴장일, 정렬, 가격 부호, 수정주가 의미는
    fixture만으로 운영 호환성을 증명할 수 없다.
 
 ## 결론
 
-08E를 성공으로 표시하지 않는다. 위 승인과 실행 환경이 확보되면 이 문서에
-실제 관측 결과를 추가하고, credential·계좌·주문 데이터는 보존하지 않는다.
+모의투자 read-only smoke는 성공으로 표시한다. 운영 endpoint·실계좌·주문은
+여전히 실행하지 않으며, credential·계좌·주문 데이터도 보존하지 않는다.

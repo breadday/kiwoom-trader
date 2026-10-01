@@ -5,8 +5,10 @@
 
 ## 1. Kiwoom read-only smoke test
 
-- 상태: 보류
-- 이유: 승인된 Kiwoom API 자격증명과 실제 네트워크 실행 환경이 필요하다.
+- 상태: 모의투자 smoke 완료 / 운영 검증 보류
+- 결과: `005930` 일봉 5개 행을 `https://mockapi.kiwoom.com`에서 조회 성공.
+- 재현: `automation/kiwoom_readonly_smoke.py`
+- 남은 이유: 운영(real) endpoint와 실계좌 인증은 안전 범위 밖이며 별도 승인 필요.
 - 안전 범위: 일봉 조회(read-only)만 허용한다. 주문 API와 실계좌 잔고 조회는 실행하지 않는다.
 - 재개 조건:
   1. 운영자가 승인한 paper/read-only 앱 키와 시크릿을 로컬 환경변수로 제공한다.

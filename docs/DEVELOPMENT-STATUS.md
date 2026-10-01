@@ -52,7 +52,7 @@
 ## Remaining gates
 
 1. Complete Gate 0: publish the rewritten refs with the guarded Windows bundle and verify all seven remote ref SHAs.
-2. STEP 08E read-only Kiwoom smoke test is documented but blocked until an approved credential/network environment is available.
+2. STEP 08E paper read-only Kiwoom smoke test passed against `mockapi.kiwoom.com`; real endpoint/account validation remains disabled pending separate approval.
 3. T8 entrypoint and deployment safety guide are implemented; actual Vercel deployment is blocked on CLI network approval, authentication, project linking, and secret registration. Live-account transition remains disabled.
 4. ORB/BULL_FLAG daily optimization and data-driven portfolio recommendations remain explicitly unsupported.
 5. Live Telegram delivery remains gated on approved network access and operator-provided `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`; tests use an injected offline transport.
