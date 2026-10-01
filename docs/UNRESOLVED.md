@@ -18,25 +18,27 @@
 
 ## 2. Vercel production 배포
 
-- 상태: CLI 설치 완료 / 계정 인증·프로젝트 연결 보류
-- 이유: Vercel CLI 인증, 프로젝트 연결, 환경변수 등록 권한과 네트워크가 필요하다.
-- 현재 준비: Vercel CLI `62.1.0` 설치 완료.
+- 상태: 완료 / Telegram production credential mapping은 별도 보류
+- 결과: deployment `dpl_E1ahxTWJDjHavnU7xhLhPAss5JwM`이 `READY` 상태로 production에 반영되었다.
+- read-back: `https://kiwoom-trader.vercel.app/` 및 `/api/index.py`가 모두 `{"ok": true, "mode": "paper", "readonly": true}`를 반환했다.
+- 현재 준비: Vercel production env 목록에는 `KIWOOM_APP_KEY`, `KIWOOM_APP_SECRET`, `KIWOOM_BASE_URL`만 확인된다. Telegram 변수명은 확인되지 않았다.
 - 안전 범위: 현재 entrypoint는 paper-only이며 live 주문 전환을 허용하지 않는다.
 - 재개 조건:
-  1. 승인된 Vercel 프로젝트와 CLI 로그인이 준비된다.
-  2. `KIWOOM_APP_KEY`, `KIWOOM_APP_SECRET`을 Vercel secret store에만 등록한다.
-  3. `docs/deployment.md`의 배포 전 테스트를 통과한다.
-  4. 배포 후 endpoint 응답과 로그를 read-back하여 paper-only 상태를 확인한다.
+  1. 이 Vercel 프로젝트의 Production에 `TELEGRAM_BOT_TOKEN`과 `TELEGRAM_CHAT_ID`를 secret store로 등록한다(값은 채팅/로그/저장소에 남기지 않는다).
+  2. 실제 MATCH와 ERROR를 각각 한 번 전송하고 Telegram 수신 여부를 operator가 확인한다.
+  3. 전송 전후 `vercel env ls production`에서 이름만 read-back하고, 토큰 값은 출력하지 않는다.
 
 ## 3. Telegram 운영 전송
 
-- 상태: 보류
-- 이유: 운영자가 제공하고 승인한 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`와 외부 네트워크가 필요하다.
+- 상태: 보류 / production env mapping 미확인
+- 이유: 현재 연결된 Vercel 프로젝트의 Production env read-back에 `TELEGRAM_BOT_TOKEN`과 `TELEGRAM_CHAT_ID`가 없어서 실제 전송을 안전하게 시작할 수 없다. 로컬 프로세스에도 해당 환경변수가 없다.
+- 완료된 안전 검증: fake transport 기반 Telegram 테스트 40개 및 53개 subtests 통과; MATCH/ERROR만 전송하고 NO_MATCH는 네트워크를 호출하지 않으며, 실패 시 토큰/응답 본문을 노출하지 않는다.
+- 주문 비연결 검증: scan entrypoint/scanner/Telegram sink의 AST에 order/broker import와 `buy_market`/`sell_market`/`submit_order` 호출이 없고, 관련 안전 테스트가 통과했다.
 - 재개 조건:
-  1. 토큰과 채팅 ID를 환경변수로만 주입한다.
+  1. 정확한 Vercel `breadday99-3014/kiwoom-trader` Production 환경에 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`를 등록한다.
   2. 토큰을 문서, 커밋, 로그, 오류 메시지에 남기지 않는다.
-  3. 먼저 fake transport 테스트를 통과한다.
-  4. 실제 전송은 MATCH/ERROR 결과에 한정하고, 주문 실행과 연결하지 않는다.
+  3. 먼저 MATCH와 ERROR 각각 실제 Telegram 수신을 확인한다.
+  4. 실제 전송은 결과 sink에 한정하고 주문 실행 경로는 계속 연결하지 않는다.
 
 ## 4. ORB/BULL_FLAG 실데이터 최적화 및 portfolio recommender
 

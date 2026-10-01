@@ -76,7 +76,7 @@ vercel --prod
 
 - GitHub rewritten refs의 atomic publication 및 원격 SHA readback
 - 운영(real) Kiwoom endpoint와 실계좌 read-only 검증
-- Vercel 프로젝트 연결, secret 등록, production 배포 및 로그 readback
+- Telegram Production env mapping, MATCH/ERROR 수신 확인 및 로그 readback
 - 실전 주문 전환 승인 및 운영 통제
 
 Gate 0 원격 publication은 저장소의
