@@ -18,8 +18,9 @@
 
 ## 2. Vercel production 배포
 
-- 상태: 보류
+- 상태: CLI 설치 완료 / 계정 인증·프로젝트 연결 보류
 - 이유: Vercel CLI 인증, 프로젝트 연결, 환경변수 등록 권한과 네트워크가 필요하다.
+- 현재 준비: Vercel CLI `62.1.0` 설치 완료.
 - 안전 범위: 현재 entrypoint는 paper-only이며 live 주문 전환을 허용하지 않는다.
 - 재개 조건:
   1. 승인된 Vercel 프로젝트와 CLI 로그인이 준비된다.

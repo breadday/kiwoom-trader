@@ -22,7 +22,8 @@ python -m compileall -q api tests
 git diff --check
 ```
 
-- 전체 unittest discovery가 `OK`가 아니면 배포하지 않는다. CPython 3.14용
+- 전체 테스트가 `OK`가 아니면 배포하지 않는다. 현재 프로젝트 검증은
+  `177 passed, 121 subtests passed`이며, CPython 3.14용
   `.tmp-pydeps`를 사용할 때는 반드시 CPython 3.14 interpreter로 실행한다.
 - `accounts.yaml`, `.env`, `config_live.py`, `*.key`, `token.json`을 commit하지 않는다.
 - API key, secret, token, account number를 로그·fixture·문서·채팅에 출력하지 않는다.
@@ -64,8 +65,8 @@ vercel --prod
 
 ## 단계적 운영 순서
 
-1. 오프라인 fixture 및 전체 81개 테스트 통과
-2. 승인된 환경에서 read-only `ka10081` smoke test
+1. 오프라인 fixture 및 전체 테스트 통과
+2. 승인된 모의투자 환경에서 read-only `ka10081` smoke test 통과
 3. 응답 page size/rate limit/휴장일/가격 부호 확인
 4. paper/mock 주문 안전성 회귀 확인
 5. 배포 대상과 데이터 보존 범위에 대한 사용자 승인
@@ -74,7 +75,7 @@ vercel --prod
 ## 현재 미완료 항목
 
 - GitHub rewritten refs의 atomic publication 및 원격 SHA readback
-- 승인된 Kiwoom read-only 실행 환경에서의 08E smoke test
+- 운영(real) Kiwoom endpoint와 실계좌 read-only 검증
 - Vercel 프로젝트 연결, secret 등록, production 배포 및 로그 readback
 - 실전 주문 전환 승인 및 운영 통제
 
