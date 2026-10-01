@@ -7,11 +7,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DEMO_SCRIPT = ROOT / "automation" / "kiwoom_rescue_demo.py"
 
 
 class DemoPortfolioPrivacyTests(unittest.TestCase):
     def test_rescue_demo_script_uses_only_explicit_sample_portfolio_data(self):
-        source = (ROOT / "kiwoom_rescue_bot.py").read_text(encoding="utf-8")
+        source = DEMO_SCRIPT.read_text(encoding="utf-8")
 
         self.assertNotIn("REAL_POSITIONS", source)
         self.assertNotIn("실제 계좌 상태", source)
@@ -62,7 +63,7 @@ class DemoPortfolioPrivacyTests(unittest.TestCase):
 
         position = dict(SAMPLE_POSITIONS["DEMO-003"], current=28_000)
         with patch.dict(SAMPLE_POSITIONS, {"DEMO-003": position}):
-            _, output = run_demo_offline(ROOT / "kiwoom_rescue_bot.py")
+            _, output = run_demo_offline(DEMO_SCRIPT)
 
         sale_lines = [line for line in output.splitlines() if "가상 매도" in line]
         self.assertEqual(3, len(sale_lines))
@@ -85,7 +86,7 @@ class DemoPortfolioPrivacyTests(unittest.TestCase):
         )
         self.assertLessEqual(strategy_imports, {"numpy", "pandas"})
 
-        demo_globals, output = run_demo_offline(ROOT / "kiwoom_rescue_bot.py")
+        demo_globals, output = run_demo_offline(DEMO_SCRIPT)
         for code, position in SAMPLE_POSITIONS.items():
             close = demo_globals["history"][code]["close"]
             self.assertEqual(position["avg"], close.iloc[0])
@@ -118,7 +119,7 @@ class DemoPortfolioPrivacyTests(unittest.TestCase):
         env["PYTHONHASHSEED"] = "random"
         outputs = [
             subprocess.check_output(
-                [sys.executable, "-m", "tests.offline_demo_runner", str(ROOT / "kiwoom_rescue_bot.py")],
+                [sys.executable, "-m", "tests.offline_demo_runner", str(DEMO_SCRIPT)],
                 cwd=ROOT,
                 env=env,
                 text=True,
