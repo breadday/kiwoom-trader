@@ -27,7 +27,7 @@ APP_SECRET = "YOUR_KIWOOM_APP_SECRET"
 
 ## 실행
 ```bash
-python kiwoom_rescue_bot.py  # 계좌 진단
+python automation/kiwoom_rescue_demo.py  # 합성 데이터 오프라인 데모
 python trading_bot_factor.py # 팩터 리밸런싱 (paper=True 모의투자)
 ```
 

@@ -26,6 +26,7 @@
 - Durable Telegram alert state reloads under a companion OS lock and serializes duplicate checks, delivery, and persistence across local processes.
 - `api/scan_entrypoint.py`: environment-validated, paper-only composition entrypoint for one read-only scan-and-notify cycle with an explicitly injected evaluator.
 - `api/scan_scheduling.py`: bounded Telegram-only retry wrapper and non-blocking OS file lock for single-host scheduled scans.
+- `automation/kiwoom_rescue_demo.py`: deterministic synthetic-data-only offline demo; no account-like legacy path is restored after history sanitization.
 
 ## Verification
 
