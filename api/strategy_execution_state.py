@@ -111,7 +111,7 @@ class PartialExitStateStore:
             if self.path.stat().st_size > _MAX_STATE_FILE_BYTES:
                 raise ValueError("partial-exit state file is too large")
             payload = load_state_json(self.path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
+        except (FileNotFoundError, NotADirectoryError):
             return {}
         except ValueError:
             raise ValueError("partial-exit state file is invalid") from None
