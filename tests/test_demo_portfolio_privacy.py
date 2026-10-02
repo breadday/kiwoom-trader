@@ -110,6 +110,23 @@ class DemoPortfolioPrivacyTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "selected Python process API"):
                 run_demo_offline(probe)
 
+    def test_direct_demo_entrypoint_runs_from_repository_root(self):
+        import os
+        import subprocess
+        import sys
+
+        env = os.environ.copy()
+        completed = subprocess.run(
+            [sys.executable, str(DEMO_SCRIPT)],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertIn("가상 샘플 현금:", completed.stdout)
+        self.assertIn("가상 매도", completed.stdout)
+
     def test_offline_demo_output_is_deterministic_across_processes(self):
         import os
         import subprocess

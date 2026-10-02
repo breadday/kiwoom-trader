@@ -5,6 +5,16 @@ resources. It exists as a deterministic regression fixture for the paper-only
 rescue allocation rules.
 """
 
+import sys
+from pathlib import Path
+
+
+# Make the documented ``python automation/...`` entrypoint import from the
+# repository root without requiring an installed package.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import pandas as pd
 
 from api.demo_portfolio import split_quantity_evenly
