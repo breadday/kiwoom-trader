@@ -51,14 +51,12 @@
 
 ## 6. Gate 0 rewritten-ref publication
 
-- 상태: 안전한 preflight에서 중단 / 원격 write 없음
-- 결과: `automation/guarded-history-push.ps1` dry-run이 expected rewritten commit `b54e785bc1c9d65f1d034ae6d3f55b1ae199c4c1`를 현재 checkout에서 찾지 못해 중단했다.
-- 추가 관측: 현재 원격 heads도 문서의 2026-09-27 old-SHA snapshot과 달라졌다(`main`은 현재 작업 커밋, STEP 07은 `c2d7bad...`). 따라서 기존 seven-ref mapping을 추정해 force-push하지 않는다.
-- 안전 범위: 원격 ref/tag는 변경하지 않았다. 일반 main 작업과 Telegram/배포 상태는 보존된다.
-- 재개 조건:
-  1. 원래 filtered mirror 또는 새로 재생성한 verified rewrite bundle에서 다섯 filtered target commit과 최종 STEP 07F commit을 확보한다.
-  2. 정확한 대상 ref와 old-SHA snapshot을 현재 GitHub에서 다시 승인·고정한다.
-  3. 별도 명시 승인 후 guarded script의 `-Execute -ConfirmRewrite`를 실행하고 seven-ref post-push SHA를 read-back한다.
+- 상태: 완료 / 원격 read-back 확인
+- 결과: GitHub 원격에 `main`과 sanitized STEP 07F를 포함한 7개 branch ref가 반영되어 있다.
+- 현재 `main` 및 STEP 07F: `c819934c9f5b94c192bf9e88fb9a3b434f4dd5c9`
+- 기타 rewritten refs: STEP 07=`51ecae94a5666874079b83cf2a212c105b09c925`, STEP 07B=`6966a33daeb91bdb6dca5bc265f6a8038d5548bf`, STEP 07C=`56c8b8efc5568411b29c95402721428a9d658089`, STEP 07D=`5f888320fa31ac1eff7eb54e91f150e9560cd106`, STEP 07E=`8219afc718936e56c1a8ba5adad998f33f848248`.
+- 확인: 원격 `main`과 local fresh checkout SHA가 일치하며, legacy `kiwoom_rescue_bot.py`는 없고 `automation/kiwoom_rescue_demo.py`가 존재한다.
+- 안전 범위: history rewrite force-push는 추가로 수행하지 않는다. 이후 변경은 일반 branch/PR 절차를 사용한다.
 
 ## 확인 명령
 

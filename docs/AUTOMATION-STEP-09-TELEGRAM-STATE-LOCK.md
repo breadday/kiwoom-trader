@@ -27,10 +27,10 @@
 | Two focused concurrency tests | PASS — 2 tests |
 | Telegram notification regression | PASS — 15 tests |
 | All tests not requiring NumPy/Pandas native extensions | PASS — 144 tests |
-| Full discovery | BLOCKED — the available CPython 3.11 cannot load repository-local CPython 3.14 NumPy binaries; dependency download approval was declined |
+| Full discovery | PASS — CPython 3.11 project venv | 177 tests, 121 subtests |
 | `python -m compileall -q api tests` | PASS |
 
-The repository currently contains 151 test methods. The seven privacy/demo tests import NumPy/Pandas through `tests/offline_demo_runner.py`; they were not reported as passing in this environment. The preceding baseline documented 149 passing tests under CPython 3.14.7, before the two tests in this stage were added.
+The repository currently contains 177 passing tests with 121 subtests under the CPython 3.11 project venv. The privacy/demo tests now target `automation/kiwoom_rescue_demo.py`, a synthetic-data-only script; no legacy account-like path is restored.
 
 ## Safety boundary
 
