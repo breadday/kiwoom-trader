@@ -18,6 +18,17 @@ from automation.kiwoom_readonly_smoke import load_credentials
 UNIVERSE = StrategyOptimizer.FACTOR_UNIVERSE
 
 
+def validate_complete_universe(daily_bars, universe, required_bars):
+    """Fail closed unless every approved symbol has the requested bar count."""
+    missing = [
+        f"{code}: received {len(daily_bars.get(code, ()))}/{required_bars}"
+        for code in universe
+        if len(daily_bars.get(code, ())) != required_bars
+    ]
+    if missing:
+        raise RuntimeError("FACTOR_BACKTEST_BLOCKED " + "; ".join(missing))
+
+
 def fetch_daily_bars(api, code, base_date, required_bars, *, max_attempts=4):
     """Fetch one symbol, retrying only HTTP 429 with bounded backoff."""
     for attempt in range(max_attempts):
@@ -51,13 +62,9 @@ def main() -> int:
         daily_bars[code] = fetch_daily_bars(
             api, code, args.base_date, required_bars
         )
-        if len(daily_bars[code]) != required_bars:
-            raise RuntimeError(
-                f"FACTOR_BACKTEST_BLOCKED missing {required_bars} bars for {code}; "
-                f"received {len(daily_bars[code])}"
-            )
         if index + 1 < len(UNIVERSE):
             time.sleep(1.5)
+    validate_complete_universe(daily_bars, UNIVERSE, required_bars)
     results = StrategyOptimizer().simulate_factor_universe(
         days=args.days,
         daily_bars_by_code=daily_bars,
