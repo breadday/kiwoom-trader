@@ -62,3 +62,4 @@
 7. Local processes can serialize duplicate-alert state with `KIWOOM_ALERT_STATE_FILE`; serverless/multi-instance deployment still requires an external durable store with concurrency control.
 8. `KIWOOM_SCAN_LOCK_FILE` prevents overlapping runs on one host only; multi-instance deployment requires a distributed lock.
 9. The optional partial-exit state file supports same-host multi-process serialization and remains intentionally conservative: new campaigns require explicit reset. Multi-host execution requires a distributed store/lock, and automatic campaign rollover requires a broker-supplied stable position identity.
+10. NH and other broker adapters remain mock/paper-only until official API contracts and approved paper credentials are available.

@@ -60,6 +60,14 @@
   2. 정확한 대상 ref와 old-SHA snapshot을 현재 GitHub에서 다시 승인·고정한다.
   3. 별도 명시 승인 후 guarded script의 `-Execute -ConfirmRewrite`를 실행하고 seven-ref post-push SHA를 read-back한다.
 
+## 7. NH/기타 broker 실 API 연동
+
+- 상태: mock/paper 안전 경계만 구현 / 실 API 연동 보류
+- 위치: `api/multi_broker_api_1.py`, `api/multi_broker_api_2.py`, `api/multi_broker_api_3.py`
+- 이유: broker별 인증, endpoint, rate limit, 잔고·주문 계약이 승인·검증되지 않았다.
+- 현재 안전 범위: mock/paper 검증과 비-paper fail-closed만 허용한다. TODO 주석을 실제 네트워크 호출로 대체하지 않는다.
+- 재개 조건: broker별 공식 API 계약과 승인된 paper credential을 별도로 제공하고, read-only fixture·failing test·bounded smoke를 먼저 추가한다.
+
 ## 확인 명령
 
 외부 조건이 준비되기 전까지는 다음 오프라인 검증을 반복한다.

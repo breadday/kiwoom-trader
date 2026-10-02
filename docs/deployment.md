@@ -23,7 +23,7 @@ git diff --check
 ```
 
 - 전체 테스트가 `OK`가 아니면 배포하지 않는다. 현재 프로젝트 검증은
-  `177 passed, 121 subtests passed`이며, CPython 3.14용
+  `180 passed, 121 subtests passed`이며, CPython 3.14용
   `.tmp-pydeps`를 사용할 때는 반드시 CPython 3.14 interpreter로 실행한다.
 - `accounts.yaml`, `.env`, `config_live.py`, `*.key`, `token.json`을 commit하지 않는다.
 - API key, secret, token, account number를 로그·fixture·문서·채팅에 출력하지 않는다.
@@ -76,7 +76,7 @@ vercel --prod
 
 - GitHub rewritten refs의 atomic publication 및 원격 SHA readback
 - 운영(real) Kiwoom endpoint와 실계좌 read-only 검증
-- Telegram Production env mapping, MATCH/ERROR 수신 확인 및 로그 readback
+- Telegram Production env mapping과 로컬 secret-safe MATCH/ERROR 전송은 완료했다. 수신 메시지 read-back은 Telegram `getUpdates`에 최근 update가 없어 보류 중이다.
 - 실전 주문 전환 승인 및 운영 통제
 
 Gate 0 원격 publication은 저장소의
