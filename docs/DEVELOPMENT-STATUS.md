@@ -26,11 +26,12 @@
 - Durable Telegram alert state reloads under a companion OS lock and serializes duplicate checks, delivery, and persistence across local processes.
 - `api/scan_entrypoint.py`: environment-validated, paper-only composition entrypoint for one read-only scan-and-notify cycle with an explicitly injected evaluator.
 - `api/scan_scheduling.py`: bounded Telegram-only retry wrapper and non-blocking OS file lock for single-host scheduled scans.
+- `automation/continue_safe.py`: safe local continuation runner that executes offline tests/compile/demo/whitespace checks and records results without credentials, external network, commit, or push.
 - `automation/kiwoom_rescue_demo.py`: deterministic synthetic-data-only offline demo; no account-like legacy path is restored after history sanitization.
 
 ## Verification
 
-- Full discovery passes 178 tests with 121 subtests using the repository-local `.venv`; no credential values are printed or committed.
+- Full discovery passes 180 tests with 121 subtests using the repository-local `.venv`; no credential values are printed or committed.
 - The Vercel entrypoint regression verifies explicit secret injection, hard-coded paper mode, read-only output, and the supported `BaseHTTPRequestHandler` contract.
 - Scan automation isolates provider/evaluator failures per symbol, validates daily bars before evaluation, and publishes result batches only through an injected sink.
 - Request-throttle tests verify immediate first use, minimum-interval waits, backward-clock safety, invalid configuration rejection, concurrent-call serialization, and throttling before live balance network access.

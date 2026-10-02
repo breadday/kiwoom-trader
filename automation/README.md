@@ -19,7 +19,22 @@ smoke/inspect/verify는 Codex `read-only`로 실행되며, 전후 Git 상태가 
 실계좌·실주문·credential 접근은 이 오케스트레이션의 범위가 아니다. 커밋과
 푸시는 자동 실행하지 않는다.
 
-## 순차 파이프라인 검증
+## 안전한 자동 연속 진행
+
+`continue_safe.py`는 외부 서비스·credential·주문·commit/push 없이 로컬 개발 상태를 반복 검증하고 결과를 `docs/AUTOMATED-CONTINUATION-RESULTS.md`에 기록한다.
+
+```powershell
+.\.venv\Scripts\python.exe automation\continue_safe.py
+```
+
+계획·개발·테스트·검증 문서는 다음에 있다.
+
+- `docs/AUTOMATED-CONTINUATION-PLAN.md`
+- `docs/AUTOMATED-CONTINUATION-DEVELOPMENT.md`
+- `docs/AUTOMATED-CONTINUATION-TEST.md`
+- `docs/AUTOMATED-CONTINUATION-VERIFICATION.md`
+- 미처리 외부 게이트: `docs/UNRESOLVED.md`
+
 
 `hermes-codex-pipeline.ps1`는 Architect → Coder → Tester → Reviewer 순서로
 실행한다. 각 단계의 prompt/response/log와 최종 판정을
