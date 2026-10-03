@@ -52,9 +52,9 @@
 ## 6. Gate 0 rewritten-ref publication
 
 - 상태: 안전한 preflight에서 중단 / 원격 write 없음
-- 결과: `automation/guarded-history-push.ps1` dry-run을 재실행했으나 현재 checkout에 `origin` remote가 없어 `git ls-remote --heads origin` 단계에서 중단했다. 원격 write는 수행하지 않았다.
-- 추가 관측: 이전 preflight에서 확인된 expected rewritten commit 누락 및 old-SHA snapshot 불일치도 해결되지 않았다. 현재 remote ref를 읽을 수 없으므로 기존 seven-ref mapping을 추정해 force-push하지 않는다.
-- 안전 범위: 원격 ref/tag는 변경하지 않았다. 일반 main 작업과 Telegram/배포 상태는 보존된다.
+- 결과: `origin`을 등록하고 인증된 `git ls-remote`/`git fetch --prune`까지 성공했다. guarded dry-run은 `main` old snapshot 불일치에서 중단했다.
+- 현재 원격 관측: `main=287728ce148f56810469ef664855f59e9eb07a92`, `feat/kiwoom-rescue-demo-data-sanitization-stage-07f=c819934c9f5b94c192bf9e88fb9a3b434f4dd5c`. 원격에는 문서에 없던 `docs/reconcile-verification-status` branch도 존재한다.
+- 안전 범위: 인증·fetch·원격 read만 수행했다. 원격 ref/tag 변경과 force-push는 수행하지 않았다. 기존 seven-ref mapping을 현재 상태에 추정 적용하지 않는다.
 - 재개 조건:
   1. 원래 filtered mirror 또는 새로 재생성한 verified rewrite bundle에서 다섯 filtered target commit과 최종 STEP 07F commit을 확보한다.
   2. 정확한 대상 ref와 old-SHA snapshot을 현재 GitHub에서 다시 승인·고정한다.
