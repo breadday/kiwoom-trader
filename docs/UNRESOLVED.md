@@ -52,8 +52,8 @@
 ## 6. Gate 0 rewritten-ref publication
 
 - 상태: 안전한 preflight에서 중단 / 원격 write 없음
-- 결과: `automation/guarded-history-push.ps1` dry-run이 expected rewritten commit `b54e785bc1c9d65f1d034ae6d3f55b1ae199c4c1`를 현재 checkout에서 찾지 못해 중단했다.
-- 추가 관측: 현재 원격 heads도 문서의 2026-09-27 old-SHA snapshot과 달라졌다(`main`은 현재 작업 커밋, STEP 07은 `c2d7bad...`). 따라서 기존 seven-ref mapping을 추정해 force-push하지 않는다.
+- 결과: `automation/guarded-history-push.ps1` dry-run을 재실행했으나 현재 checkout에 `origin` remote가 없어 `git ls-remote --heads origin` 단계에서 중단했다. 원격 write는 수행하지 않았다.
+- 추가 관측: 이전 preflight에서 확인된 expected rewritten commit 누락 및 old-SHA snapshot 불일치도 해결되지 않았다. 현재 remote ref를 읽을 수 없으므로 기존 seven-ref mapping을 추정해 force-push하지 않는다.
 - 안전 범위: 원격 ref/tag는 변경하지 않았다. 일반 main 작업과 Telegram/배포 상태는 보존된다.
 - 재개 조건:
   1. 원래 filtered mirror 또는 새로 재생성한 verified rewrite bundle에서 다섯 filtered target commit과 최종 STEP 07F commit을 확보한다.
