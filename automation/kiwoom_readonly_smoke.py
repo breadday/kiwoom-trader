@@ -24,10 +24,15 @@ def load_credentials(path: Path) -> None:
         name, value = line.split("=", 1)
         values[name.strip()] = value.strip()
     try:
-        os.environ["KIWOOM_APP_KEY"] = values["APP_KEY_MOCK"]
-        os.environ["KIWOOM_APP_SECRET"] = values["APP_SECRET_MOCK"]
+        app_key = values["APP_KEY_MOCK"] if "APP_KEY_MOCK" in values else values["KIWOOM_APP_KEY"]
+        app_secret = values["APP_SECRET_MOCK"] if "APP_SECRET_MOCK" in values else values["KIWOOM_APP_SECRET"]
+        os.environ["KIWOOM_APP_KEY"] = app_key
+        os.environ["KIWOOM_APP_SECRET"] = app_secret
     except KeyError as exc:
-        raise ValueError("credential file must contain demo App Key/Secret") from exc
+        raise ValueError(
+            "credential file must contain APP_KEY_MOCK/APP_SECRET_MOCK "
+            "or KIWOOM_APP_KEY/KIWOOM_APP_SECRET"
+        ) from exc
 
 
 def main() -> int:

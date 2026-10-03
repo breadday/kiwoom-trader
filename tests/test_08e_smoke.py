@@ -34,6 +34,20 @@ def _chart_response():
     })
 
 
+def _minute_chart_response():
+    return FakeResponse({
+        "return_code": 0,
+        "stk_min_pole_chart_qry": [{
+            "cntr_tm": "20260930101500",
+            "open_pric": "100",
+            "high_pric": "110",
+            "low_pric": "90",
+            "cur_prc": "105",
+            "trde_qty": "1000",
+        }],
+    })
+
+
 def _run_readonly_smoke():
     with patch.dict(
         os.environ,
@@ -72,6 +86,31 @@ def test_08e_readonly_smoke():
 class Step08ESmokeTests(unittest.TestCase):
     def test_08e_readonly_smoke(self):
         _run_readonly_smoke()
+
+    @patch("api.kiwoom_api.requests.post")
+    def test_minute_chart_uses_ka10080_and_normalizes_mock_rows(self, post):
+        post.return_value = _minute_chart_response()
+        api = KiwoomAPI(
+            app_key="minute-test-app-key",
+            app_secret="minute-test-app-secret",
+            base_url="https://mockapi.kiwoom.com",
+            paper=True,
+        )
+        api._throttle = lambda: None
+
+        result = api.get_minute_chart("005930", tick=1)
+
+        self.assertEqual(result[0]["datetime"], "20260930101500")
+        self.assertEqual(result[0]["close"], 105.0)
+        self.assertEqual(result[0]["volume"], 1000.0)
+        request = post.call_args
+        self.assertEqual(request.args[0], "https://mockapi.kiwoom.com/api/dostk/chart")
+        self.assertEqual(request.kwargs["headers"]["api-id"], "ka10080")
+        self.assertEqual(request.kwargs["json"], {
+            "stk_cd": "005930",
+            "tic_scope": "1",
+            "upd_stkpc_tp": "1",
+        })
 
     @patch("api.kiwoom_api.requests.post")
     def test_live_orders_fail_closed_without_network(self, post):

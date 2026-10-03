@@ -49,13 +49,53 @@ class KiwoomAPI:
         self._request_throttle.wait()
 
     def get_minute_chart(self, code, tick=1):
+        """Read normalized one-minute (or supported interval) OHLCV bars.
+
+        Kiwoom ka10080 is read-only and is available on the mock endpoint.
+        The method deliberately never falls back to synthetic bars.
+        """
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError("code must be a non-empty stock code")
+        if tick not in (1, 3, 5, 10, 15, 30, 45, 60):
+            raise ValueError("tick must be one of 1, 3, 5, 10, 15, 30, 45, 60")
         self._throttle()
-        if self.paper:
-            # 모의 데이터는 백테스트에서 주입
-            return []
-        url = f"{self.base}/dostk/mintick"
-        r = requests.post(url, headers=self.auth.headers(), json={"stk_cd": code, "tic_scope": tick})
-        return r.json().get("chart", [])
+        url = f"{self.auth.base_url.rstrip('/')}/api/dostk/chart"
+        headers = {
+            **self.auth.headers(),
+            "api-id": "ka10080",
+            "cont-yn": "N",
+            "next-key": "",
+        }
+        response = requests.post(
+            url,
+            headers=headers,
+            json={"stk_cd": code, "tic_scope": str(tick), "upd_stkpc_tp": "1"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("return_code", 0) != 0:
+            raise RuntimeError("Kiwoom minute chart request failed")
+        rows = payload.get("stk_min_pole_chart_qry")
+        if rows is None:
+            rows = payload.get("stk_min_pole_chart")
+        if not isinstance(rows, list):
+            raise RuntimeError("Kiwoom minute chart rows are missing or invalid")
+        normalized = []
+        for row in rows:
+            if not isinstance(row, dict):
+                raise RuntimeError("Invalid Kiwoom minute chart row")
+            try:
+                normalized.append({
+                    "datetime": str(row.get("cntr_tm") or row.get("dt") or ""),
+                    "open": float(row["open_pric"]),
+                    "high": float(row["high_pric"]),
+                    "low": float(row["low_pric"]),
+                    "close": float(row["cur_prc"]),
+                    "volume": float(row["trde_qty"]),
+                })
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError("Invalid Kiwoom minute chart row") from exc
+        return normalized
 
     def clear_daily_cache(self):
         """Invalidate all daily chart results held by this API instance."""
