@@ -4,6 +4,7 @@
 ## 1. 프로젝트 개요
 키움 REST API 기반 종목별 전략 자동매매 시스템. 8종목(-945만원 손실) 구조조정 및 신규 매매를 위해 4개 전략을 종목별로 다르게 적용.
 
+**저장소:** https://github.com/breadday/kiwoom-trader
 **작업 경로:** 저장소를 clone한 디렉터리(절대경로 비의존)
 **Git:** `origin/main`과 동기화
 **Python:** 프로젝트별 `.venv` 사용
