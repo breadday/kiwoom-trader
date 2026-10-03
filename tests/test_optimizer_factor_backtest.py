@@ -6,8 +6,8 @@ from api.strategy_optimizer import StrategyOptimizer
 
 
 UNIVERSE = (
-    "005935", "061220", "067310", "086520",
-    "253590", "272210", "441680", "416770",
+    "005935", "067310", "086520",
+    "253590", "272210", "441680",
 )
 
 
@@ -64,7 +64,7 @@ class FactorBacktestTests(unittest.TestCase):
         qualities = {code: 100.0 for code in UNIVERSE}
         self.assertEqual(
             StrategyOptimizer._exclude_low_quality(qualities),
-            set(sorted(UNIVERSE)[:2]),
+            set(sorted(UNIVERSE)[:1]),
         )
 
     def test_low_quality_filter_rejects_nonfinite_measurements(self):

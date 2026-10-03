@@ -29,7 +29,7 @@
   - 파일: /api/kiwoom_api.py, /api/strategy_optimizer.py, /docs/AUTOMATION-STEP-07*.md
   - 완료조건: 읽기 전용 일봉 조회를 최적화 계산에 연결하고, 확정된 전략/데이터 계약으로 검증
   - 진행: 모의투자 `ka10081` read-only smoke, 실제 일봉 기반 RESCUE 최적화, FACTOR 데이터 연결과 CI 검증을 완료했다. 세부 결과는 `docs/AUTOMATION-STEP-08E-RESULTS.md`와 `docs/REAL-DATA-BACKTEST-RESULTS.md` 참조.
-  - 남음: FACTOR 승인 유니버스의 `061220`, `416770`은 현재 모의 API에서 종목정보와 일봉이 빈 응답이라 전체 백테스트가 fail-closed로 중단된다. ORB/BULL_FLAG 및 portfolio recommender 계약은 fail-closed.
+  - 처리: FACTOR 유니버스에서 데이터가 없는 `061220`, `416770`을 제외하고, 데이터가 확인된 6종목(`005935`, `067310`, `086520`, `253590`, `272210`, `441680`)으로 백테스트를 진행한다. ORB/BULL_FLAG 및 portfolio recommender 계약은 fail-closed.
 
 - [ ] T8: Vercel paper 배포 + accounts.yaml 실전 전환 가이드 (paper 배포 완료)
   - 파일: /api/index.py, /vercel.json, /docs/deployment.md

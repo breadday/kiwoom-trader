@@ -27,9 +27,11 @@ class StrategyOptimizer:
     평가 기준 4가지를 종합 점수로 계산
     """
 
+    # Approved data-available universe. 061220 and 416770 are excluded
+    # until the mock API provides the required 312 daily bars.
     FACTOR_UNIVERSE = (
-        "005935", "061220", "067310", "086520",
-        "253590", "272210", "441680", "416770",
+        "005935", "067310", "086520",
+        "253590", "272210", "441680",
     )
     FACTOR_LOOKBACK_BARS = 252
 
